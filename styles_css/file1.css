@@ -248,7 +248,7 @@
     width: 310px;
 
     position: fixed;
-    bottom: -525px;
+    bottom: -543px; /* 575-32*/
     right:0px;
 
     transition: linear 2s ease-in-out; /*animation isnt really implemented*/

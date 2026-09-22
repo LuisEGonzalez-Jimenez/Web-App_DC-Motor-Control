@@ -1,13 +1,16 @@
 //sidebar Functionality ---------------------------
+const INITIATE = -1;
 const STEP = 0;
 const SINE = 1;
 const PID = 2;
-const SIM = 3;
+const IDEN = 3;
 
 const CONTINUOUS = 0;
 const DISCRETE = 1;
 
-window.sb_state = STEP;
+
+//
+window.sb_state = INITIATE; 
 window.sb_condis = CONTINUOUS;
 
 
@@ -639,7 +642,7 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     return bf;
 }
 
-//save sim data
+//save sim data (currently uselss but well use this code to save step and sine data)
 function save_sim_data(){
     window.simulate_motor.armature_resistance = document.getElementById("UI_armature_resistance").value;
     window.simulate_motor.armature_inductance = document.getElementById("UI_armature_inductance").value;
@@ -653,7 +656,7 @@ function save_sim_data(){
 
 //delete all from side bar
 function clean_sidebar(place){
-    if(window.sb_state == SIM){
+    if(window.sb_state == IDEN){
         save_sim_data()
     }
     place.removeChild(document.getElementById("sb_contents"));
@@ -675,7 +678,7 @@ function creating_sidebar_group(father, height_size){
     father.appendChild(creating_sbg);
     return creating_sbg;
 }
-//window.sb_state = change_button_highlights(SIM);
+
 function change_button_highlights(current_button){
     //sb state is the previously highlighted button
     //current button should be the new one to highlight
@@ -686,8 +689,10 @@ function change_button_highlights(current_button){
         b_previous_button = document.getElementById("b_pid");
     } else if (window.sb_state == SINE) {
         b_previous_button = document.getElementById("b_sine");
-    } else if (window.sb_state == SIM) {
-        b_previous_button = document.getElementById("b_sim");
+    } else if (window.sb_state == IDEN) {
+        b_previous_button = document.getElementById("b_identification");
+    } else if (window.sb_state == INITIATE) {
+        return STEP; //if we are initiating there is no reason to change anything
     }
 
 
@@ -700,8 +705,8 @@ function change_button_highlights(current_button){
         current_button_name = "b_pid";
     } else if (current_button == SINE) {
         current_button_name = "b_sine";
-    } else if (current_button == SIM) {
-        current_button_name = "b_sim";
+    } else if (current_button == IDEN) {
+        current_button_name = "b_identification";
     }
 
 
@@ -1217,14 +1222,14 @@ function change_to_PID(condis) {
 
 
 //change to sine
-document.getElementById("b_sim").addEventListener("click", () => {
-    change_to_sim();
+document.getElementById("b_identification").addEventListener("click", () => {
+    change_to_identification();
 });
 
-function change_to_sim() {
+function change_to_identification() {
 
     //check if we are not there currently
-    if (window.sb_state == SIM) {
+    if (window.sb_state == IDEN) {
         return 0;
     }
 
@@ -1239,102 +1244,26 @@ function change_to_sim() {
     const sbc = creating_sidebar_contents(place);
 
     //create sidebar group with heights:
-    const sbg = creating_sidebar_group(sbc, 6);
+    const sbg = creating_sidebar_group(sbc, 4);
+    
+    //create a chooice between step sine and pid
     
 
-    const armature_resistance = sbf_basicform(
-        "/communicationScript.py",
-        "armature_resistance",
-        "Armature resistance:",
-        dictionaryUnitsOfMeasure["armature_resistance"],
-        "number",
-        0.01, 
-        window.simulate_motor.armature_resistance,
-        6
-    );
-    sbg.appendChild(armature_resistance);
+    const sbg2 = creating_sidebar_group(sbc, 4);
+    //button
     
-    const armature_inductance = sbf_basicform(
-        "/communicationScript.py",
-        "armature_inductance",
-        "Armature inductance:",
-        dictionaryUnitsOfMeasure["armature_inductance"],
-        "number",
-        0.01,
-        window.simulate_motor.armature_inductance,
-        6
-    );
-    sbg.appendChild(armature_inductance);
+    const sbg3 = creating_sidebar_group(sbc, 4);
 
-    const back_electromotive_force_constant = sbf_basicform(
-        "/communicationScript.py",
-        "back_electromotive_force_constant",
-        "Back electromotive force constant:",
-        dictionaryUnitsOfMeasure["back_electromotive_force_constant"],
-        "number",
-        0.01,
-        window.simulate_motor.back_electromotive_force_constant,
-        6
-    );
-    sbg.appendChild(back_electromotive_force_constant);
-    
-
-    const torque_constant = sbf_basicform(
-        "/communicationScript.py",
-        "torque_constant",
-        "Torque constant:",
-        dictionaryUnitsOfMeasure["torque_constant"],
-        "number",
-        0.01,
-        window.simulate_motor.torque_constant,
-        6
-    );
-    sbg.appendChild(torque_constant);
-
-
-    const motor_rotor_inertia = sbf_basicform(
-        "/communicationScript.py",
-        "motor_rotor_inertia",
-        "Motor rotor inertia:",
-        dictionaryUnitsOfMeasure["motor_rotor_inertia"],
-        "number",
-        0.01,
-        window.simulate_motor.motor_rotor_inertia,
-        6
-    );
-    sbg.appendChild(motor_rotor_inertia);
-
-
-    const viscous_friction_coefficient = sbf_basicform(
-        "/communicationScript.py",
-        "viscous_friction_coefficient",
-        "Viscous friction coefficient:",
-        dictionaryUnitsOfMeasure["viscous_friction_coefficient"],
-        "number",
-        0.01,
-        window.simulate_motor.viscous_friction_coefficient,
-        6
-    );
-    sbg.appendChild(viscous_friction_coefficient);
-    
-  
-
+    //output box really. a p element
 
 
 
     //highlight the bar and unhighlight previous button
-    window.sb_state = change_button_highlights(SIM);
-    
-    
-
-
+    window.sb_state = change_button_highlights(IDEN);
     return 0;
 }
 
 
-//    window.sb_state = change_button_highlights(SIM);
-    
-    
 
 
 
@@ -1342,22 +1271,7 @@ function change_to_sim() {
 
 
 
-//this runs the first time, and because step is loaded through html instead of html it means i have to declare this 2 times
-//cause for the slider to work this has to be here
-//future improvements could make there be less html and more js. to noot have to write everyhting twice.
-
-const SliderDutyCycle = document.getElementById("SliderDutyCycle");
-const UI_dutycycle = document.getElementById("UI_dutycycle");
-
-// Moving the slider updates the box
-SliderDutyCycle.addEventListener("input", function () {
-    UI_dutycycle.value = SliderDutyCycle.value;
-});
-
-// Editing the box updates the slider
-UI_dutycycle.addEventListener("input", function () {
-    SliderDutyCycle.value = UI_dutycycle.value;
-});
+change_to_step();
 
 
 //play and stop expand

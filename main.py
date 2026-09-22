@@ -28,21 +28,14 @@ def build_motor():
     #this needs more logic, you change the value and nothing changes till you force a save
     #if we are in the sim page, we get the values from the input boxes
     float(web.page["UI_vcc"].value)
-    if(js.sb_state == SIM):
-        Ra = float(web.page["UI_armature_resistance"].value)
-        La = float(web.page["UI_armature_inductance"].value)
-        Kb = float(web.page["UI_back_electromotive_force_constant"].value)
-        Kt = float(web.page["UI_torque_constant"].value)
-        Jm = float(web.page["UI_motor_rotor_inertia"].value)
-        Bm = float(web.page["UI_viscous_friction_coefficient"].value)
-    else:
-        Ra = float(js.simulate_motor.armature_resistance)
-        La = float(js.simulate_motor.armature_inductance)
-        Kb = float(js.simulate_motor.back_electromotive_force_constant)
-        Kt = float(js.simulate_motor.torque_constant)
-        Jm = float(js.simulate_motor.motor_rotor_inertia)
-        Bm = float(js.simulate_motor.viscous_friction_coefficient)
     
+    Ra = float(web.page["UI_armature_resistance"].value)
+    La = float(web.page["UI_armature_inductance"].value)
+    Kb = float(web.page["UI_back_electromotive_force_constant"].value)
+    Kt = float(web.page["UI_torque_constant"].value)
+    Jm = float(web.page["UI_motor_rotor_inertia"].value)
+    Bm = float(web.page["UI_viscous_friction_coefficient"].value)
+
     
     A = np.array([
         [-Ra / La, -Kb / La],
@@ -51,7 +44,6 @@ def build_motor():
     B = np.array([[1 / La], [0]], dtype=float)
     C = np.array([[0, 1]], dtype=float)
     D = np.array([[0]], dtype=float)
-    print("Built motor")
     return A, B, C, D
 
 #u used to be the space state for current, thus it stayed the same. 
@@ -103,16 +95,8 @@ def make_step(t, amplitude: float, t0: float = 0.0, offset: float = 0.0):
 
 
 
-
-
-
-
-
-@when("click", "#b_start")
-async def on_start(event):
-    await js.jsReadyPromise  
-    print("clicked button")
-    
+#i need a function that isnt assigned or async just in case
+def calculate():
     vcc = float(web.page["UI_vcc"].value)   
     # Initial conditions:
     # current = 0 A
@@ -126,7 +110,27 @@ async def on_start(event):
     plot_graphs(time, output, "Angular velocity [rad/s]", "DC Motor Speed Response" , "plot_area_1")
     plot_graphs(time, voltage, output_label="Voltage [V]", title="Armature Voltage", graph_id="plot_area_2",)
 
+    
+
+@when("click", "#b_start")
+async def on_start(event):
+    await js.jsReadyPromise  
+    print("clicked start button")
+    calculate()
+    
+
+@when("keydown", ".enter_exectute_graphs")
+def on_key(event):
+    if event.key == "Enter":
+        event.preventDefault()
+        calculate()
+
+
+
+
+
 # Schedule the async function to run
+# this might be useless as we dont really use the main 
 asyncio.ensure_future(main())
 
     
