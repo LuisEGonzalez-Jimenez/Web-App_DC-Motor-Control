@@ -1,0 +1,9 @@
+{
+    "packages": [
+        "numpy",
+        "control",
+        "asyncio",
+        "matplotlib",
+        "plotly"
+    ]
+}

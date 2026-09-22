@@ -1,0 +1,197 @@
+<html>
+    <head>
+        <title>
+            python website
+        </title>
+        <link href="styles_css\file1.css" rel="stylesheet" />
+        <link rel="stylesheet" href="https://pyscript.net/releases/2026.7.3/core.css" />
+        <script type="module" src="https://pyscript.net/releases/2026.7.3/core.js"></script>
+        <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    </head>
+    <body>
+        <div class="top_navigation_bar">
+            <p>navigation bar</p>
+        </div>
+        <!-- we are gonna have 4 sections -->
+        <!-- sidebar -->
+        <div id="sb_main" class="sidebar-1">
+            
+            <!-- profile and shi -->
+            <div class="sidebar_group sbgh2">
+                <div class="sidebar_basic_elements system_status" id="system_id">
+                    <p>O | System Off</p>
+                </div>
+
+            
+                <div class="sidebar_basic_elements input_box">
+                    <form action="/communicationScript.py">
+                        <label class="descriptor" for="vcc">Set Vcc:</label>
+                        <input type="number" step="0.01" name="Vcc" id="UI_vcc" value="12">
+                    </form>
+                </div>
+
+            </div>
+
+            <!-- line to divide contents  -->
+         
+
+            
+            <div id="sb_contents" class="sidebar_contents_css">
+                <div class="sidebar_group sbgh4">
+                    
+                    <div class="sidebar_basic_elements formula">
+                        
+                            <math>
+                                <mi>V</mi>
+                                <mo>(</mo><mi>t</mi><mo>)</mo>
+                                <mo>=</mo>
+                                <mi>A</mi>
+                                <mi>&mu;</mi>
+                                <mo>(</mo>
+                                <mi>t</mi>
+                                <mo>-</mo>
+                                <msub><mi>t</mi><mn>0</mn></msub>
+                                <mo>)</mo>
+                                <mo>+</mo>
+                                <mi>&Delta;</mi>
+                            </math>
+
+                           
+                        
+                    </div>
+                    <div class="sidebar_basic_elements">
+                        <form action="/communicationScript.py">
+                            <label class="descriptor" for="Amp">Amplitude: </label>
+                            <div>
+                                <math><mi>A</mi></math>
+                                <input type="number" step="0.01" name="Amp" id="UI_amp" size="7">
+                            </div>
+                        </form>
+                    </div>
+                    <div class="sidebar_basic_elements">
+                        <form action="/communicationScript.py">
+                            <label class="descriptor" for="IT">Initial Time: </label>
+                            <div>
+                                <math><msub><mi>t</mi><mn>0</mn></msub></math>
+                                <input type="number" step="0.01" name="IT" id="UI_IT" size="7">
+                            </div>
+                        </form>
+                    </div>
+                    <div class="sidebar_basic_elements">
+                        <form action="/communicationScript.py">
+                            <label class="descriptor" for="offset">Offset: </label>
+                            <div>
+                                <mi>&Delta;</mi>
+                                <input type="number" step="0.01" name="offset" id="UI_offset" size="7">
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+
+
+                <div class="sidebar_group sbgh3">
+        
+                    <div class="sidebar_basic_elements">
+                        <form action="/communicationScript.py">
+                            <label class="descriptor" for="DutyCyle">Duty Cycle: </label>
+                            <div>
+                                
+                                <input type="number" step="0.01" name="DutyCyle" id="UI_dutycycle" value="100" size="4">
+                            </div>
+                        </form>
+                        
+                    </div>
+                    <div class="sidebar_basic_elements">
+                        <input type="range" id="SliderDutyCycle" min="1" max="100" value="50">
+                    </div>
+                        
+
+
+                    <div class="sidebar_basic_elements">
+                        <form action="/communicationScript.py">
+                            <label class="descriptor" for="sign">Sign V(t): </label>
+                            <div>
+                                
+                                <input type="number" step="0.01" name="sign" id="UI_sign"value="1" size="7">
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+
+
+            </div>
+
+            
+        
+
+            
+        </div>
+
+
+                <!-- sidebar buttons to change everything / within the sidebar, so thi smight be grabbed by it being a flexbox-->
+        <div class="sidebar_buttons_area">
+            <button type="button"       id="b_step"    class="sb_button_selected"  style="margin-top: 0px;" >Step</button>
+            <button type="button"       id="b_sine"    class="sb_button">Sine</button>
+            <button type="button"       id="b_pid"    class="sb_button">PID</button>
+            <button type="button"       id="b_sim"    class="sb_button">Sim</button>
+        </div>
+
+
+
+        <!-- graph area -->
+        <div class="graph_area">
+            <div class="container_graph">
+                <div class="actual_graph" id="plot_area_1"></div>
+            </div>
+            <div class="container_graph">
+                <div class="actual_graph" id="plot_area_2"></div>
+            </div>
+        </div>
+
+
+        <!-- play and stop -->
+         <!-- ideaaly this works with button clicks or like space and crtl save -->
+        <div id="play_and_stop_container">
+            <div class="play_and_stop" id="UI_play_and_stop">
+                <div class="pas_button_container">
+                    <button class="pas_buttons" id="b_start">Start</button>
+                    <button class="pas_buttons" id="b_stop">Stop</button>
+                    <button class="pas_buttons" id="b_load">Load</button>
+                    <button class="pas_buttons" id="b_save">Save</button>
+                </div>
+                <div class="pas_collapsible_arrow" id="b_collapsible_arrow">
+                    <button class="pas_button_arrow">[>]</button>
+                </div>
+            </div>
+            <div class="sidebar_group">
+                <div class="sidebar_basic_elements"><form action="/communicationScript.py"><label class="descriptor" for="armature_resistance">Armature resistance:</label><div class="formula_input_right">
+                    <math><msub><mi>R</mi><mi>a</mi></msub></math>
+                <input type="number" step="0.01" name="armature_resistance" id="UI_armature_resistance" size="6"></div></form></div><div class="sidebar_basic_elements"><form action="/communicationScript.py"><label class="descriptor" for="armature_inductance">Armature inductance:</label><div class="formula_input_right">
+                    <math><msub><mi>L</mi><mi>a</mi></msub></math>
+                <input type="number" step="0.01" name="armature_inductance" id="UI_armature_inductance" size="6"></div></form></div><div class="sidebar_basic_elements"><form action="/communicationScript.py"><label class="descriptor" for="back_electromotive_force_constant">Back electromotive force constant:</label><div class="formula_input_right">
+                    <math><msub><mi>K</mi><mi>b</mi></msub></math>
+                <input type="number" step="0.01" name="back_electromotive_force_constant" id="UI_back_electromotive_force_constant" size="6"></div></form></div><div class="sidebar_basic_elements"><form action="/communicationScript.py"><label class="descriptor" for="torque_constant">Torque constant:</label><div class="formula_input_right">
+                    <math><msub><mi>K</mi><mi>t</mi></msub></math>
+                <input type="number" step="0.01" name="torque_constant" id="UI_torque_constant" size="6"></div></form></div><div class="sidebar_basic_elements"><form action="/communicationScript.py"><label class="descriptor" for="motor_rotor_inertia">Motor rotor inertia:</label><div class="formula_input_right">
+                    <math><msub><mi>J</mi><mi>m</mi></msub></math>
+                <input type="number" step="0.01" name="motor_rotor_inertia" id="UI_motor_rotor_inertia" size="6"></div></form></div><div class="sidebar_basic_elements"><form action="/communicationScript.py"><label class="descriptor" for="viscous_friction_coefficient">Viscous friction coefficient:</label><div class="formula_input_right">
+                    <math><msub><mi>B</mi><mi>m</mi></msub></math>
+                <input type="number" step="0.01" name="viscous_friction_coefficient" id="UI_viscous_friction_coefficient" size="6"></div></form></div>
+
+            </div>
+        </div>
+        <!-- top left user -->
+
+
+
+        <script src="js/script.js"></script>
+        <!-- TODO: this should be injected later at the end of the js file after having placed a 
+        loading screen. first thing the pyhton file shoudl do is remove this loading screen.
+        takes          
+        -->
+        <script type="py" src="./main.py" config="./pyscript.json"></script>
+        
+    </body>
+</html>

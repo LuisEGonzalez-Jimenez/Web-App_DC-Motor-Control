@@ -1,0 +1,308 @@
+
+:root {
+    --meblue:rgba(67, 30, 245);
+    --megrey:rgba(243, 245, 246);
+    --medarkergrey:rgb(238, 240, 237);
+
+    --sbh:50px;
+    --sdborderWidth:9.8px;
+    /* side bar inner elements margin */
+    --sdem:5px; 
+    --sbpadding:12px;
+    /* sidebar group margin */
+    --sdbgm:3px;
+
+    --nbh:40px;
+}
+
+/* more variables or things to use */
+/* height is equal to the sidebar default height + the innner element margins, times the amountt of elements within it */
+.sbgh1{ height: calc(((var(--sbh) + (var(--sdem) * 2)) * 1) - var(--sdborderWidth));}
+.sbgh2{ height: calc(((var(--sbh) + (var(--sdem) * 2)) * 2) - var(--sdborderWidth));}
+.sbgh3{ height: calc(((var(--sbh) + (var(--sdem) * 2)) * 3) - var(--sdborderWidth));}
+.sbgh4{ height: calc(((var(--sbh) + (var(--sdem) * 2)) * 4) - var(--sdborderWidth));}
+.sbgh5{ height: calc(((var(--sbh) + (var(--sdem) * 2)) * 5) - var(--sdborderWidth));}
+.sbgh6{ height: calc(((var(--sbh) + (var(--sdem) * 2)) * 6) - var(--sdborderWidth));}
+/*this is an exception i created for the gains sidebar*/
+.sbgh1_bigger_60{ height: calc(((var(--sbh) +5px + (var(--sdem) * 2)) * 6) - var(--sdborderWidth));}
+
+
+*{
+    padding: 0;
+    margin: 0;
+    
+}
+
+/* basic elements and their respective insisdes */
+
+
+.top_navigation_bar{
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 100vw;
+    height: var(--nbh);
+    padding-top: 10px;
+    background-color: var(--medarkergrey);
+}
+
+
+
+/* sidebar ----------------------------------------------------------------- */
+.sidebar-1 {
+    background-color: white;
+    width: 340px; /*this could vary on phones*/
+    height: calc(100vh - var(--nbh));
+    position: fixed;
+    top: var(--nbh);
+    left: 0;
+    
+}
+
+.sidebar_contents_css{
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+}
+
+.sidebar_group{
+    width: 300px;
+    /* height is gonna be specified elsewhere, 
+    dependes ont he amount of elements so in 
+    theory60 * the amoutn of elements */
+    height: auto;
+    background-color: var(--megrey);
+    justify-content: center;
+    margin: auto;
+    margin-top: var(--sdbgm);
+    margin-bottom: var(--sdbgm);
+
+    border: solid;
+    border-width: 5px;
+    border-color: var(--megrey);
+    border-radius: 20px;
+}
+
+
+.sidebar_basic_elements{
+    width: 280px;
+    height: auto;
+    position: static;
+    background-color: whitesmoke;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    margin: auto;
+    margin-top: var(--sdem);
+    margin-bottom: var(--sdem);
+
+    padding-top: var(--sbpadding);
+    padding-bottom: var(--sbpadding);
+}
+
+.formula_input_right{
+    display: flex; 
+    justify-content: flex-end;
+}
+
+.sidebar_basic_elements:hover{
+    background-color: var(--medarkergrey);
+}
+
+.sidebar_basic_elements form {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 20px;
+}
+
+.system_status{
+    font-size: 15px;
+}
+
+.input_box{
+    font-size: 10px;
+
+}
+
+.descriptor{
+    font-size: 20px;
+    color: black;
+    margin-right: 30px;
+}
+
+.formula{
+    font-size: 25px;
+    display: flex;
+    justify-content: center; /* horizontal chat helpedl*/
+    align-items: center;     /* vertical */
+
+    border-left: 5px solid var(--meblue);
+    padding-left: 10px;
+    
+}
+
+
+
+/* mak eit mobile responsive
+@media (max-width: 700px) {
+    .sidebar-1 {
+        width: 100vw;
+    }
+} */
+
+.sidebar_buttons_area {
+    background-color: var(--megrey);
+    width: 60px;
+    height: calc(100vh - var(--nbh));
+    
+    position:fixed;
+    
+    top: var(--nbh);
+    left: 340px;
+}
+
+.sb_button{
+    background-color: var(--megrey);
+    rotate: 90deg;
+    height: 60px;
+    width: 120px;
+    font-size: 25px;
+    position: relative;
+    top: 30px;
+    left: -30.5px;
+    margin-top: 60;
+    
+    border-width: 0px;
+    
+}
+.sb_button:hover{
+    background-color: white;
+    border-radius: 10px 10px 0px 0px;
+}
+
+.sb_button_selected{
+    background-color: white;
+    rotate: 90deg;
+    height: 60px;
+    width: 120px;
+    font-size: 25px;
+    position: relative;
+    top: 30px;
+    left: -31px;
+    margin-top: 60;
+    
+    border-width: 0px;
+    border-radius: 10px 10px 0px 0px;
+}
+
+.condis{
+    font-size: 18px;
+    display: flex; 
+    gap: 40px; 
+}
+
+
+
+/* graphs ----------------------------------------------------------------- */
+
+
+.graph_area{
+    background-color: var(--megrey);
+    height: calc(100vh - var(--nbh));
+    width: calc(100vw - 400px);
+    position: fixed;
+    top: var(--nbh);
+    right: 0px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.container_graph{
+    height: 45%;
+    width: 95%;
+    margin: 15px;
+    background-color: white;
+    border-radius: 20px;
+    border-color: var(--megrey);
+    border-style: solid;
+    border-width: 0px;
+    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.05), 0 6px 20px 0 rgba(0, 0, 0, 0.02);
+}
+
+.actual_graph{
+   margin: 10px; 
+}
+
+
+/* play and stop ----------------------------------------------------------------- */
+
+#play_and_stop_container{
+    background-color: var(--megrey);
+    height: calc((((var(--sbh) + (var(--sdem) * 2)) * 6) - var(--sdborderWidth))+32px);
+    width: 310px;
+
+    position: fixed;
+    bottom: -525px;
+    right:0px;
+
+    transition: linear 2s ease-in-out; /*animation isnt really implemented*/
+
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+
+}
+
+#UI_play_and_stop{
+    background-color: var(--medarkergrey);
+    height:32px;
+    width: 300px;
+    
+    border-radius: 10px;
+
+    display: flex;
+    align-items: row;
+    justify-content: space-evenly;
+}
+
+#play_and_stop_container.expand{
+    bottom: 0px;
+}
+
+.pas_button_container{
+    width: 80%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+}
+
+.pas_collapsible_arrow{
+    width: 20%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+}
+.pas_button_arrow{
+    height: 80%;
+    width: 80%;
+
+}
+
+.pas_buttons{
+    height: 80%;
+    width: 20%;
+}
+.container_for_simulate_data{
+    background-color: aliceblue;
+}
+
+
+
