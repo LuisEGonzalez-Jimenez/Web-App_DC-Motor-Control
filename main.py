@@ -1,6 +1,7 @@
 import numpy as np
 import control as ct
 import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
 
 from pyscript import web, when, window
 from pyscript import document
@@ -94,15 +95,45 @@ def make_step(t, amplitude: float, t0: float = 0.0, offset: float = 0.0):
     """
     return np.where(t >= t0, amplitude + offset, offset).astype(float)
 
+def make_sine(t, A: float, omega: float, phi: float = 0.0, delta: float = 0.0):
+    """
+    Returns a continuous sine function u(t):
+
+        u(t) = A * sin(omega * t + phi) + delta
+
+    Parameters
+    ----------
+    t : array-like
+        Time (or independent variable) values.
+    A : float
+        Amplitude of the sine wave.
+    omega : float
+        Angular frequency (rad/s). Period T = 2*pi / omega.
+    phi : float, optional
+        Phase angle (radians), default 0.0.
+    delta : float, optional
+        Vertical offset (DC component), default 0.0.
+
+    Returns
+    -------
+    numpy.ndarray
+        Sine wave evaluated at t.
+    """
+    
+    t = np.asarray(t, dtype=float)
+    return A * np.sin(omega * t + phi) + delta
 
 
+def make_sine_discrete(n, A: float, omega: float, phi: float = 0.0, delta: float = 0.0):
+    n = np.asarray(n, dtype=float)   # cast to float so sin() works
+    return A * np.sin(omega * n + phi) + delta
 
 
 #i need a function that isnt assigned or async just in case
-def calculate(value, u, t):
+def calculate(value, u, t, samples: int = 1000):
     if value == "simulate":
         print("simulating")
-        u = np.full(1000, 12)
+        u = np.full(samples, 12)
         voltage_backup = u
     # elif value == "Step":
         
@@ -115,7 +146,7 @@ def calculate(value, u, t):
 
     # Simulate
     # def run_simulation(u, vcc: float, x0, time series, n_samples: int = 1000):
-    time, output, voltage = run_simulation(u, x0, t, 1000)
+    time, output, voltage = run_simulation(u, x0, t, samples)
 
     
 
@@ -141,8 +172,6 @@ async def on_start(event):
 
 
 
-# submit identification only exists when we click window so
-# @when("click", ".UI_submit_identification")
 
 #step simulate and more prob
 async def on_submit_identification(event=None):
@@ -156,7 +185,8 @@ async def on_submit_identification(event=None):
         return 0
     
     #assume time input is 5
-    time_amount = 5
+    time_amount = 10
+    time_samples = 1000 #this is default
 
     value = selected.value
     if value == "Step":
@@ -164,18 +194,20 @@ async def on_submit_identification(event=None):
         #these arent loaded so:
         #Ra = float(js.simulate_motor.armature_resistance) (reference of how to write)
         amp = float(js.step.amp)
-        it = float(js.step.it)
-        offset = float(js.step.offset)
-
         if not amp:
             print("no amp received")
             amp = 0
+
+        it = float(js.step.it)
         if not it:
             print("no inital time received")
             it = 0
+
+        offset = float(js.step.offset)
         if not offset:
             print("no offset received")
             offset = 0
+
         #time change later
         time_array = np.linspace(0, time_amount, 1000)
 
@@ -183,10 +215,72 @@ async def on_submit_identification(event=None):
         #def make_step(t, amplitude: float, t0: float = 0.0, offset: float = 0.0):
         u = make_step(time_array, amp, it, offset)
         
+    if value == "Sine_Con":
+
+        amp = float(js.sine_con.amp)
+        if not amp:
+            print("no amp given")
+            amp = 0
+        freq = float(js.sine_con.freq)
+        if not freq:
+            print("no freq given")
+            freq = 0
+        phase_angle = float(js.sine_con.phase_angle)
+        if not phase_angle:
+            print("no phase_angle given")
+            phase_angle = 0
+        offset = float(js.sine_con.offset)
+        if not offset:
+            print("no offset given")
+            offset = 0
+        # period = js.sine_dis.period
+        # if not period:
+        #     print("no period given")
+        #     period = 0
+
+        #time change later
+        time_array = np.linspace(0, time_amount, 1000)
+
+        #u stands for voltage array
+        #def make_sine(t, A: float, omega: float, phi: float = 0.0, delta: float = 0.0):
+        u = make_sine(time_array, amp, freq, phase_angle, offset)
+    
+    if value == "Sine_Dis":
+
+        amp = float(js.sine_con.amp)
+        if not amp:
+            print("no amp given")
+            amp = 0
+        freq = float(js.sine_con.freq)
+        if not freq:
+            print("no freq given")
+            freq = 0
+        phase_angle = float(js.sine_con.phase_angle)
+        if not phase_angle:
+            print("no phase_angle given")
+            phase_angle = 0
+        offset = float(js.sine_con.offset)
+        if not offset:
+            print("no offset given")
+            offset = 0
+        period = float(js.sine_dis.period)
+        if not period:
+            print("no period given")
+            period = 1
+
+        time_samples = int(time_amount / period)
+        #time change later
+        time_array = np.linspace(0, time_amount, time_samples)
+
+        #u stands for voltage array
+        #we gotta design time_array which means cmaking the number of samples
+
+        #def make_sine_discrete(n, A: float, omega: float, phi: float = 0.0, delta: float = 0.0):
+        u = make_sine_discrete(time_array, amp, freq, phase_angle, offset)
 
 
-    if value == "Sine":
-        return 0
+
+
     if value == "PID":
         return 0
     
@@ -196,7 +290,7 @@ async def on_submit_identification(event=None):
     with this data we pass it to a function that should output the motors configuration.
     """
     
-    calculate(value, u, time_amount )
+    calculate(value, u, time_amount, time_samples)
 
     #if its step 
 

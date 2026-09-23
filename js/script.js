@@ -22,6 +22,17 @@ window.step = {
     sign: 0
 };
 
+window.sine_con = {
+    amp: 0,
+    freq: 0,
+    phase_angle: 0,
+    offset: 0
+};
+
+window.sine_dis = {
+    period: 0
+};
+
 
 // Create a promise and expose it on the window object
 window.jsReadyPromise = new Promise((resolve) => {
@@ -664,12 +675,38 @@ function save_step_data(){
     window.step["sign"] = document.getElementById("UI_sign").value;
 
 }
+function save_sine_con_data(){
+    window.sine_con["amp"] = document.getElementById("UI_amp").value;
+    window.sine_con["freq"] = document.getElementById("UI_freq").value;
+    window.sine_con["phase_angle"] = document.getElementById("UI_phase_angle").value;
+    window.sine_con["offset"] = document.getElementById("UI_offset").value;
+
+}
+function save_sine_dis_data(){
+    window.sine_con["amp"] = document.getElementById("UI_amp").value;
+    window.sine_con["freq"] = document.getElementById("UI_freq").value;
+    window.sine_con["phase_angle"] = document.getElementById("UI_phase_angle").value;
+    window.sine_con["offset"] = document.getElementById("UI_offset").value;
+    window.sine_dis["period"] = document.getElementById("UI_period").value;
+
+}
 
 //delete all from side bar
 function clean_sidebar(place){
+    //the logic behind this is that when we start clearing any page, we want to save data
     if(window.sb_state == STEP){
         save_step_data()
+    } else if(window.sb_state == SINE){
+
+        //we are entering anything that is not sine and the sb_state hasnt changed, then lets save this info
+        if(window.sb_condis == CONTINUOUS){
+            save_sine_con_data()
+        } else{
+            save_sine_dis_data()
+        }
+        
     }
+
     place.removeChild(document.getElementById("sb_contents"));
 }
 //adddding content
@@ -747,6 +784,12 @@ document.getElementById("b_sine").addEventListener("click", () => {
 });
 
 function change_to_sine(condis) {
+    //info we need:
+    const place = document.getElementById("sb_main");
+
+    //delete all from side bar
+    //we arrive at sine and we want to save the previous data.
+    clean_sidebar(place);
 
     //check if we are not there currently
     if (window.sb_state == SINE) {
@@ -755,13 +798,6 @@ function change_to_sine(condis) {
         }
     }
     window.sb_condis = condis; //because they differ after this
-
-   //info we need:
-    const place = document.getElementById("sb_main");
-
-
-    //delete all from side bar
-    clean_sidebar(place);
 
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
@@ -831,21 +867,23 @@ function change_to_sine(condis) {
     //              missing adding id i believe? might not be needed
     const bf = sbf_basicform(
         "/communicationScript.py",
-        "Amp",
+        "amp",
         "Amplitude:",
         dictionaryUnitsOfMeasure["amp"],
         "number",
-        0.01
+        0.01,
+        window.sine_con["amp"]
     );
     sbg2.appendChild(bf);
 
     const freq = sbf_basicform(
         "/communicationScript.py",
-        "Freq",
+        "freq",
         "Frequency:",
         dictionaryUnitsOfMeasure["omega"],
         "number",
-        0.01
+        0.01,
+        window.sine_con["freq"]
     );
     sbg2.appendChild(freq);
 
@@ -855,7 +893,8 @@ function change_to_sine(condis) {
         "Phase Angle:",
         dictionaryUnitsOfMeasure["phi"],
         "number",
-        0.01
+        0.01,
+        window.sine_con["phase_angle"]
     );
     sbg2.appendChild(phase_angle);
 
@@ -865,7 +904,8 @@ function change_to_sine(condis) {
         "Offset:",
         dictionaryUnitsOfMeasure["delta"],
         "number",
-        0.01
+        0.01,
+        window.sine_con["offset"]
     );
     sbg2.appendChild(offset);
 
@@ -877,7 +917,8 @@ function change_to_sine(condis) {
             "Period:",
             dictionaryUnitsOfMeasure["period"],
             "number",
-            0.01
+            0.01,
+            window.sine_dis["period"]
         );
         sbg2.appendChild(offset);
     }
@@ -1026,6 +1067,7 @@ document.getElementById("b_pid").addEventListener("click", () => {
     change_to_PID(CONTINUOUS);
 });
 
+//change to pid
 function change_to_PID(condis) {
     //check if we are not there currently
     if (window.sb_state == PID) {
@@ -1268,8 +1310,10 @@ function change_to_identification() {
             <p>Select method of identification:</p>
             <input type="radio" id="step" name="method_identification" value="Step" checked>
             <label for="Step">Step</label><br>
-            <input type="radio" id="sine" name="method_identification" value="Sine">
-            <label for="Sine">Sine</label><br>
+            <input type="radio" id="sine_con" name="method_identification" value="Sine_Con">
+            <label for="Sine">Sine continious</label><br>
+            <input type="radio" id="sine_dis" name="method_identification" value="Sine_Dis">
+            <label for="Sine">Sine discrete</label><br>
             <input type="radio" id="pid" name="method_identification" value="PID">
             <label for="PID">PID</label>
         </form>

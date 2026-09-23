@@ -4,6 +4,7 @@
         "control",
         "asyncio",
         "matplotlib",
-        "plotly"
+        "plotly",
+        "scipy"
     ]
 }
