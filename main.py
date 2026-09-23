@@ -1,7 +1,8 @@
 import numpy as np
 import control as ct
 import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit
+#from scipy.optimize import curve_fit #commented this it doesnt seem as if we are using it
+from scipy.signal import savgol_filter
 
 from pyscript import web, when, window
 from pyscript import document
@@ -22,6 +23,83 @@ async def main():
     #lets wait until the promes gets returned.
     promise = js.jsReadyPromise
     await promise
+
+#identifying motor parameters immma write this first till i get it, and then imma understand it.
+
+
+def estimate_motor_params(t, v, i, omega, Kt_equals_Kb=True):
+    """
+    Estimate DC motor parameters from time-series data.
+    
+    Parameters
+    ----------
+    t     : (N,) time vector [s]
+    v     : (N,) armature voltage [V]
+    i     : (N,) armature current [A]
+    omega : (N,) angular velocity [rad/s]
+    
+    Returns
+    -------
+    dict with Ra, La, Kb, Kt, Jm, Bm
+    """
+    
+    # we cna probably remove this sanity check as im pretty sure there is no scenario in which we create a array without numpy for this
+    # sanity check---------
+    t = np.asarray(t)
+    v = np.asarray(v)
+    i = np.asarray(i)
+    omega = np.asarray(omega)
+
+    dt = np.mean(np.diff(t))
+
+    # --- numerical derivatives (Savitzky-Golay is robust to noise) ---
+    # window must be odd and <= len(t)
+    w = min(31, len(t) - (1 - len(t) % 2))
+    if w % 2 == 0: w -= 1
+    if w < 5:
+        di_dt   = np.gradient(i, t)
+        domega_dt = np.gradient(omega, t)
+    else:
+        di_dt     = savgol_filter(i,     w, 3, deriv=1, delta=dt)
+        domega_dt = savgol_filter(omega, w, 3, deriv=1, delta=dt)
+
+    # =========================================================
+    # 1) Electrical equation:  v = Ra·i + La·di/dt + Kb·ω
+    #    Regress v on [i, di/dt, ω]  ->  [Ra, La, Kb]
+    # =========================================================
+    Phi_e = np.column_stack([i, di_dt, omega])   # (N,3)
+    theta_e, *_ = np.linalg.lstsq(Phi_e, v, rcond=None)
+    Ra, La, Kb = theta_e
+
+    # =========================================================
+    # 2) Mechanical equation:  Kt·i = Jm·dω/dt + Bm·ω
+    #    Regress i on [dω/dt, ω]  ->  [Jm/Kt, Bm/Kt]
+    # =========================================================
+    Phi_m = np.column_stack([domega_dt, omega])  # (N,2)
+    theta_m, *_ = np.linalg.lstsq(Phi_m, i, rcond=None)
+    Jm_over_Kt, Bm_over_Kt = theta_m
+
+    # =========================================================
+    # 3) Recover Jm, Bm
+    # =========================================================
+    if Kt_equals_Kb:
+        Kt = Kb
+        Jm = Jm_over_Kt * Kt
+        Bm = Bm_over_Kt * Kt
+    else:
+        # Not identifiable without a torque sensor — fall back to Kt = Kb
+        raise ValueError("Separate Kt and Kb are unidentifiable from v,i,ω alone.")
+
+    return {
+        "Ra": Ra, "La": La,
+        "Kb": Kb, "Kt": Kt,
+        "Jm": Jm, "Bm": Bm,
+    }
+
+
+
+
+
 
 
 
@@ -44,26 +122,30 @@ def build_motor():
         [-Ra / La, -Kb / La],
         [ Kt / Jm, -Bm / Jm],
     ], dtype=float)
+    #current consideration
     B = np.array([[1 / La], [0]], dtype=float)
-    C = np.array([[0, 1]], dtype=float)
-    D = np.array([[0]], dtype=float)
+    #out put
+    C = np.array([[1, 0],
+                  [0, 1]], dtype=float)
+    D = np.array([[0], [0]], dtype=float)
     return A, B, C, D
 
-#u used to be the space state for current, thus it stayed the same. 
+#u used to be the space state for VOLTAGE not current, thus it stayed the same. 
 # but know i believe we might adapt it to be the variabel which changes
-def run_simulation(u, x0, how_long, n_samples: int = 1000):
+def run_simulation(u, x0, how_long, n_samples=1000):
     A, B, C, D = build_motor()
     motor = ct.ss(A, B, C, D)
 
-    
+
     time_array = np.linspace(0, how_long, n_samples)
     
-    
-    # u = np.ones_like(t) * 121
-
-    
-    time_array2, output = ct.forced_response(motor, T=time_array, U=u, X0=x0)
-    return time_array2, output, u
+    t_out, output = ct.forced_response(motor, T=time_array, U=u, X0=x0)
+    current = output[0]
+    omega   = output[1]
+    #we are returning now current and omega instead of only output.
+    #aditionally we are changing time array for t_out, which should probably be the same
+    #before:  return time_array2, output, u
+    return t_out, current, omega, u
 
 # plot_graphs(time, output, "DC Motor Speed Response" ,"Angular velocity [rad/s]", plot_area_1)
 def plot_graphs(time, output, output_label, title, graph_id):
@@ -146,19 +228,30 @@ def calculate(value, u, t, samples: int = 1000):
 
     # Simulate
     # def run_simulation(u, vcc: float, x0, time series, n_samples: int = 1000):
-    time, output, voltage = run_simulation(u, x0, t, samples)
+    time, current, omega, voltage = run_simulation(u, x0, t, samples)
 
     
 
     #plot
-    plot_graphs(time, output, "Angular velocity [rad/s]", "DC Motor Speed Response" , "plot_area_1")
+    plot_graphs(time, omega, "Angular velocity [rad/s]", "DC Motor Speed Response" , "plot_area_1")
     if value == "simulate":
         plot_graphs(time, voltage_backup, output_label="Voltage [V]", title="Armature Voltage", graph_id="plot_area_2",)
     else:
 
         plot_graphs(time, voltage, output_label="Voltage [V]", title="Armature Voltage", graph_id="plot_area_2",)
     
+    plot_graphs(time, current, "Current", "Current response over time", "plot_area_3")
+    
+    
+    
     #now actually predicting what the variables of the motor look like
+    #estimate_motor_params(t, v, i, omega, Kt_equals_Kb=True)
+    dictionary = estimate_motor_params(time, voltage, current, omega, True)
+
+    #please work
+    document.querySelector("#motor_predictions").innerText = str(dictionary)
+
+
 
     
 @when("click", "#b_start")

@@ -1333,7 +1333,10 @@ function change_to_identification() {
     
     const sbg3 = creating_sidebar_group(sbc, 4);
     //output box really. a p element
-
+    text_box = document.createElement("p");
+    text_box.setAttribute('id', 'motor_predictions');
+    // text_box.;
+    sbg3.appendChild(text_box);
 
 
     //highlight the bar and unhighlight previous button
@@ -1359,6 +1362,38 @@ const play_and_stop = document.getElementById("play_and_stop_container");
 button.addEventListener("click", () => {
     play_and_stop.classList.toggle("expand");
 });
+
+
+//show error and current
+function invertVisibility(item){
+    if (item.style.display === "none") {
+        item.style.display = "block";
+    } else {
+        item.style.display = "none";
+    }
+}
+
+//id_graph_container_
+
+function current_and_error_mod() {
+    const div1 = document.getElementById("id_graph_container_1");
+    const div2 = document.getElementById("id_graph_container_2");
+    const div3 = document.getElementById("id_graph_container_3");
+    const div4 = document.getElementById("id_graph_container_4");
+
+    invertVisibility(div1);
+    invertVisibility(div2);
+    invertVisibility(div3);
+    invertVisibility(div4);
+}
+
+const button_current_error = document.getElementById("b_current_and_error");
+
+button_current_error.addEventListener("click", () => {
+    current_and_error_mod();
+});
+
+
 
 
 

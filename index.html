@@ -10,7 +10,8 @@
     </head>
     <body>
         <div class="top_navigation_bar">
-            <p>navigation bar</p>
+            <p style="margin-left: 20px; margin-right: 20px;">navigation bar</p>
+            <button id="b_current_and_error" class="nav_button">current and error</button>
         </div>
         <!-- we are gonna have 4 sections -->
         <!-- sidebar -->
@@ -59,11 +60,17 @@
 
         <!-- graph area -->
         <div class="graph_area">
-            <div class="container_graph">
+            <div class="container_graph_1" id="id_graph_container_1">
                 <div class="actual_graph" id="plot_area_1"></div>
             </div>
-            <div class="container_graph">
+            <div class="container_graph_1" id="id_graph_container_2">
                 <div class="actual_graph" id="plot_area_2"></div>
+            </div>
+            <div class="container_graph_1" id="id_graph_container_3" style="display: none;">
+                <div class="actual_graph" id="plot_area_3"></div>
+            </div>
+            <div class="container_graph_1" id="id_graph_container_4" style="display: none;">
+                <div class="actual_graph" id="plot_area_4"></div>
             </div>
         </div>
 
