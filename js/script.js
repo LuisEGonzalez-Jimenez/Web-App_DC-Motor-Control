@@ -14,6 +14,15 @@ window.sb_state = INITIATE;
 window.sb_condis = CONTINUOUS;
 
 
+window.step = {
+    amp: 0,
+    it: 0,
+    offset: 0,
+    dutycycle: 0,
+    sign: 0
+};
+
+
 // Create a promise and expose it on the window object
 window.jsReadyPromise = new Promise((resolve) => {
     // Store the resolve function so you can call it later
@@ -22,14 +31,16 @@ window.jsReadyPromise = new Promise((resolve) => {
 
 
 //Ra = 1.19; La = 0.013; Kb = 0.78; Kt = 0.6; Jm = 0.8; Bm = 0.1;
-window.simulate_motor = {
-    armature_resistance: 1.19,
-    armature_inductance: 0.013,
-    back_electromotive_force_constant: 0.78,
-    torque_constant: 0.6,
-    motor_rotor_inertia: 0.8,
-    viscous_friction_coefficient: 0.1 
-};
+
+//this is no longer in use
+// window.simulate_motor = {
+//     armature_resistance: 1.19,
+//     armature_inductance: 0.013,
+//     back_electromotive_force_constant: 0.78,
+//     torque_constant: 0.6,
+//     motor_rotor_inertia: 0.8,
+//     viscous_friction_coefficient: 0.1 
+// };
 
 
 
@@ -642,22 +653,22 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     return bf;
 }
 
-//save sim data (currently uselss but well use this code to save step and sine data)
-function save_sim_data(){
-    window.simulate_motor.armature_resistance = document.getElementById("UI_armature_resistance").value;
-    window.simulate_motor.armature_inductance = document.getElementById("UI_armature_inductance").value;
-    window.simulate_motor.back_electromotive_force_constant = document.getElementById("UI_back_electromotive_force_constant").value;
-    window.simulate_motor.torque_constant = document.getElementById("UI_torque_constant").value;
-    window.simulate_motor.motor_rotor_inertia = document.getElementById("UI_motor_rotor_inertia").value;
-    window.simulate_motor.viscous_friction_coefficient = document.getElementById("UI_viscous_friction_coefficient").value;
-        
+//save step data 
+function save_step_data(){
+    window.step["amp"] = document.getElementById("UI_amp").value;
+    window.step["it"] = document.getElementById("UI_it").value;
+    window.step["offset"] = document.getElementById("UI_offset").value;
+
+    //these have yet to be utilized but im doing it in advance
+    window.step["dutycycle"] = document.getElementById("UI_dutycycle").value;
+    window.step["sign"] = document.getElementById("UI_sign").value;
 
 }
 
 //delete all from side bar
 function clean_sidebar(place){
-    if(window.sb_state == IDEN){
-        save_sim_data()
+    if(window.sb_state == STEP){
+        save_step_data()
     }
     place.removeChild(document.getElementById("sb_contents"));
 }
@@ -923,24 +934,28 @@ function change_to_step() {
 
     //create continuous or discrete
 
+
+
     //function sbf_basicform(action, for_d, label_text, Unitofmeasure, type, step)
     const bf = sbf_basicform(
         "/communicationScript.py",
-        "Amp",
+        "amp",
         "Amplitude:",
         dictionaryUnitsOfMeasure["amp"],
         "number",
-        0.01
+        0.01,
+        window.step["amp"]
     );
     sbg.appendChild(bf);
 
     const freq = sbf_basicform(
         "/communicationScript.py",
-        "IT",
+        "it",
         "Initial Time:",
         dictionaryUnitsOfMeasure["timezero"],
         "number",
-        0.01
+        0.01,
+        window.step["it"]
     );
     sbg.appendChild(freq);
 
@@ -950,7 +965,8 @@ function change_to_step() {
         "Offset:",
         dictionaryUnitsOfMeasure["delta"],
         "number",
-        0.01
+        0.01,
+        window.step["offset"]
     );
     sbg.appendChild(offset);
 
@@ -1221,7 +1237,7 @@ function change_to_PID(condis) {
 
 
 
-//change to sine
+//change to identification
 document.getElementById("b_identification").addEventListener("click", () => {
     change_to_identification();
 });
@@ -1244,16 +1260,34 @@ function change_to_identification() {
     const sbc = creating_sidebar_contents(place);
 
     //create sidebar group with heights:
-    const sbg = creating_sidebar_group(sbc, 4);
+    const sbg = creating_sidebar_group(sbc, 3);
     
     //create a chooice between step sine and pid
+    sbg.innerHTML = `
+        <form>
+            <p>Select method of identification:</p>
+            <input type="radio" id="step" name="method_identification" value="Step" checked>
+            <label for="Step">Step</label><br>
+            <input type="radio" id="sine" name="method_identification" value="Sine">
+            <label for="Sine">Sine</label><br>
+            <input type="radio" id="pid" name="method_identification" value="PID">
+            <label for="PID">PID</label>
+        </form>
+    `;
     
-
     const sbg2 = creating_sidebar_group(sbc, 4);
-    //button
+    // sbg2.innerHTML = `
+    //     <button id="UI_submit_identification">Submit</button>
+    // `;
+    const btn = document.createElement("button");
+    btn.className = "UI_submit_identification";
+    btn.innerText = "Submit";
+    btn.addEventListener("click", () => window.handleIdentification());
+    sbg2.appendChild(btn);
+    
+    
     
     const sbg3 = creating_sidebar_group(sbc, 4);
-
     //output box really. a p element
 
 
