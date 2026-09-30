@@ -13,6 +13,8 @@ const DISCRETE = 1;
 window.sb_state = INITIATE; 
 window.sb_condis = CONTINUOUS;
 
+window.simulate_time = 10;
+
 
 window.step = {
     amp: 0,
@@ -44,14 +46,14 @@ window.jsReadyPromise = new Promise((resolve) => {
 //Ra = 1.19; La = 0.013; Kb = 0.78; Kt = 0.6; Jm = 0.8; Bm = 0.1;
 
 //this is no longer in use
-// window.simulate_motor = {
-//     armature_resistance: 1.19,
-//     armature_inductance: 0.013,
-//     back_electromotive_force_constant: 0.78,
-//     torque_constant: 0.6,
-//     motor_rotor_inertia: 0.8,
-//     viscous_friction_coefficient: 0.1 
-// };
+window.simulate_motor = {
+    armature_resistance: 1.19,
+    armature_inductance: 0.013,
+    back_electromotive_force_constant: 0.78,
+    torque_constant: 0.6,
+    motor_rotor_inertia: 0.8,
+    viscous_friction_coefficient: 0.1 
+};
 
 
 
@@ -61,7 +63,7 @@ let SliderDutyCycleHtml = `
             <label class="descriptor" for="DutyCyle">Duty Cycle: </label>
             <div>
                 
-                <input type="number" step="0.01" name="DutyCyle" id="UI_dutycycle" value="100" size="4">
+                <input type="number" step="0.01" name="DutyCyle" id="UI_dutycycle" value="100" style="width: 7em;">
             </div>
         </form>
         
@@ -576,7 +578,7 @@ function sbf_basicform(action, for_d, label_text, Unitofmeasure, type, step, val
     input.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input.name = for_d; //Amp 
     input.id = "UI_" + for_d; //UI_amp
-    input.size = size; // 7 i think its always gonna be 7
+    input.style.width = size + "em"; // 7 i think its always gonna be 7
     input.value = value;
 
     // Put everything together
@@ -621,7 +623,7 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     input.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input.name = for_d + "kp"; //Amp 
     input.id = "UI_" + for_d + "kp"; //UI_amp
-    input.size = "8"; // 7 i think its always gonna be 7
+    input.style.width = 8 + "em"; 
     div.appendChild(input);
 
 
@@ -633,7 +635,7 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     input2.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input2.name = for_d + "ki"; //Amp 
     input2.id = "UI_" + for_d + "k1"; //UI_amp
-    input2.size = "8"; // 7 i think its always gonna be 7
+    input2.style.width = 8 + "em"; 
     div.appendChild(input2);
 
 
@@ -646,7 +648,7 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     input3.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input3.name = for_d + "kd"; //Amp 
     input3.id = "UI_" + for_d + "kd"; //UI_amp
-    input3.size = "8"; // 7 i think its always gonna be 7
+    input3.style.width = 8 + "em"; 
     div.appendChild(input3);
 
 
@@ -690,6 +692,17 @@ function save_sine_dis_data(){
     window.sine_dis["period"] = document.getElementById("UI_period").value;
 
 }
+function save_sim_data(){
+
+    window.simulate_motor.armature_resistance = document.getElementById("UI_armature_resistance").value;
+    window.simulate_motor.armature_inductance = document.getElementById("UI_armature_inductance").value;
+    window.simulate_motor.back_electromotive_force_constant = document.getElementById("UI_back_electromotive_force_constant").value;
+    window.simulate_motor.torque_constant = document.getElementById("UI_torque_constant").value;
+    window.simulate_motor.motor_rotor_inertia = document.getElementById("UI_motor_rotor_inertia").value;
+    window.simulate_motor.viscous_friction_coefficient = document.getElementById("UI_viscous_friction_coefficient").value;
+        
+
+}
 
 //delete all from side bar
 function clean_sidebar(place){
@@ -718,11 +731,9 @@ function creating_sidebar_contents(place){
     place.appendChild(sidebar_contents);
     return sidebar_contents;
 }
-function creating_sidebar_group(father, height_size){
+function creating_sidebar_group(father){
     let creating_sbg = document.createElement('div');
     creating_sbg.classList.add('sidebar_group');
-    //let size_class= 'sbgh' + height_size;
-    //creating_sbg.classList.add(size_class);
     father.appendChild(creating_sbg);
     return creating_sbg;
 }
@@ -769,6 +780,194 @@ function change_button_highlights(current_button){
     return current_button;
 }
 
+function mp_close_func(){
+    save_sim_data();
+    document.body.removeChild(document.getElementById("mp_menu"));
+}
+
+function summon_mp_menu(){
+    const background = document.createElement("div");
+    background.className = "mp_background";
+    background.id = "mp_menu"
+
+    const box = document.createElement("div");
+    box.className = "mp_box";
+
+    const top = document.createElement("div");
+    top.id = "mp_box_top";
+
+    
+
+    //Create close mp
+    const close_mp = document.createElement("img");
+    close_mp.src = "images/remove.png";
+    close_mp.alt = "close";
+    close_mp.classList.add("mp_close");
+    close_mp.id = "mp_close";
+
+    // Run mp_close() when clicked
+    close_mp.addEventListener("click", mp_close_func);
+
+    // Add GIF to contents
+    
+    
+    
+    
+    const contents = document.createElement("div");
+    contents.id = "mp_box_contents";
+    
+    box.appendChild(top);
+    top.appendChild(close_mp)
+    
+
+    box.appendChild(contents);
+
+    // Put box inside background
+    background.appendChild(box);
+
+    // Put everything into the body
+    document.body.appendChild(background);
+
+
+
+    const sbc = creating_sidebar_contents(contents);
+
+    //create sidebar group with heights:
+    const sbg = creating_sidebar_group(sbc);
+    
+
+    const armature_resistance = sbf_basicform(
+        "/communicationScript.py",
+        "armature_resistance",
+        "Armature resistance:",
+        dictionaryUnitsOfMeasure["armature_resistance"],
+        "number",
+        0.01, 
+        window.simulate_motor.armature_resistance,
+        6
+    );
+    sbg.appendChild(armature_resistance);
+    
+    const armature_inductance = sbf_basicform(
+        "/communicationScript.py",
+        "armature_inductance",
+        "Armature inductance:",
+        dictionaryUnitsOfMeasure["armature_inductance"],
+        "number",
+        0.01,
+        window.simulate_motor.armature_inductance,
+        6
+    );
+    sbg.appendChild(armature_inductance);
+
+    const back_electromotive_force_constant = sbf_basicform(
+        "/communicationScript.py",
+        "back_electromotive_force_constant",
+        "Back electromotive force constant:",
+        dictionaryUnitsOfMeasure["back_electromotive_force_constant"],
+        "number",
+        0.01,
+        window.simulate_motor.back_electromotive_force_constant,
+        6
+    );
+    sbg.appendChild(back_electromotive_force_constant);
+    
+
+    const torque_constant = sbf_basicform(
+        "/communicationScript.py",
+        "torque_constant",
+        "Torque constant:",
+        dictionaryUnitsOfMeasure["torque_constant"],
+        "number",
+        0.01,
+        window.simulate_motor.torque_constant,
+        6
+    );
+    sbg.appendChild(torque_constant);
+
+
+    const motor_rotor_inertia = sbf_basicform(
+        "/communicationScript.py",
+        "motor_rotor_inertia",
+        "Motor rotor inertia:",
+        dictionaryUnitsOfMeasure["motor_rotor_inertia"],
+        "number",
+        0.01,
+        window.simulate_motor.motor_rotor_inertia,
+        6
+    );
+    sbg.appendChild(motor_rotor_inertia);
+
+
+    const viscous_friction_coefficient = sbf_basicform(
+        "/communicationScript.py",
+        "viscous_friction_coefficient",
+        "Viscous friction coefficient:",
+        dictionaryUnitsOfMeasure["viscous_friction_coefficient"],
+        "number",
+        0.01,
+        window.simulate_motor.viscous_friction_coefficient,
+        6
+    );
+    sbg.appendChild(viscous_friction_coefficient);
+
+
+
+}
+// i  dont think i need this arguments as windos are global variables.
+function simulate_area(father){
+    sbg = creating_sidebar_group(father);
+
+    const sb_elements = document.createElement('div');
+    sb_elements.classList.add('sidebar_basic_elements');
+    sbg.appendChild(sb_elements);
+
+
+    let text = document.createElement('p');
+    text.innerText = "Simulate Motor:  "
+    sb_elements.appendChild(text)
+
+
+    const btn = document.createElement("button");
+    btn.className = "sd_summon_mp_menu";
+    btn.innerText = "Edit variables";
+    btn.addEventListener("click", () => summon_mp_menu());
+    sb_elements.appendChild(btn);
+    
+    //add a time input and a play simulation
+    const bf = sbf_basicform(
+        "/communicationScript.py",
+        "time",
+        "Time:",
+        "T",
+        "number",
+        0.01,
+        window.simulate_time,
+        window.simulate_time
+    );
+    sbg.appendChild(bf);
+    
+    const sb_elements_3 = document.createElement('div');
+    sb_elements_3.classList.add('sidebar_basic_elements');
+    sbg.appendChild(sb_elements_3);
+    
+    const btn2 = document.createElement('button')
+    btn.className = "sd_play_simulation";
+    btn2.innerText = "Play Simmulation";
+    btn2.addEventListener("click", () => window.handleIdentification());
+    sb_elements_3.appendChild(btn2)
+
+
+    //save this to a variable the results. to a window variable
+
+}
+
+
+
+
+
+
+
 
 
 
@@ -787,23 +986,28 @@ function change_to_sine(condis) {
     //info we need:
     const place = document.getElementById("sb_main");
 
-    //delete all from side bar
-    //we arrive at sine and we want to save the previous data.
-    clean_sidebar(place);
-
+    
     //check if we are not there currently
     if (window.sb_state == SINE) {
         if (window.sb_condis == condis) {
             return 0;
         }
     }
+    
+    //delete all from side bar
+    //we arrive at sine and we want to save the previous data.
+    clean_sidebar(place);
+    
+
     window.sb_condis = condis; //because they differ after this
 
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
 
+    simulate_area(sbc);
+
     //create sidebar group with heights:
-    const sbg = creating_sidebar_group(sbc, 1);
+    const sbg = creating_sidebar_group(sbc);
 
     //create continuous or discrete
     if (condis == CONTINUOUS) {
@@ -872,7 +1076,8 @@ function change_to_sine(condis) {
         dictionaryUnitsOfMeasure["amp"],
         "number",
         0.01,
-        window.sine_con["amp"]
+        window.sine_con["amp"],
+        7
     );
     sbg2.appendChild(bf);
 
@@ -960,9 +1165,11 @@ function change_to_step() {
 
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
+    
+    simulate_area(sbc);
 
     //create sidebar group with heights:
-    const sbg = creating_sidebar_group(sbc, 4);
+    const sbg = creating_sidebar_group(sbc);
 
 
     const sbf = document.createElement('div');
@@ -1090,8 +1297,10 @@ function change_to_PID(condis) {
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
 
+    simulate_area(sbc);
+
     //create sidebar group with heights:
-    const sbg = creating_sidebar_group(sbc, 1);
+    const sbg = creating_sidebar_group(sbc);
 
     //create continuous or discrete
     if (condis == CONTINUOUS) {
@@ -1302,7 +1511,7 @@ function change_to_identification() {
     const sbc = creating_sidebar_contents(place);
 
     //create sidebar group with heights:
-    const sbg = creating_sidebar_group(sbc, 3);
+    const sbg = creating_sidebar_group(sbc);
     
     //create a chooice between step sine and pid
     sbg.innerHTML = `
@@ -1319,7 +1528,7 @@ function change_to_identification() {
         </form>
     `;
     
-    const sbg2 = creating_sidebar_group(sbc, 4);
+    const sbg2 = creating_sidebar_group(sbc);
     // sbg2.innerHTML = `
     //     <button id="UI_submit_identification">Submit</button>
     // `;
@@ -1331,7 +1540,7 @@ function change_to_identification() {
     
     
     
-    const sbg3 = creating_sidebar_group(sbc, 4);
+    const sbg3 = creating_sidebar_group(sbc);
     //output box really. a p element
     text_box = document.createElement("p");
     text_box.setAttribute('id', 'motor_predictions');
@@ -1356,12 +1565,12 @@ change_to_step();
 
 
 //play and stop expand
-const button = document.getElementById("b_collapsible_arrow");
-const play_and_stop = document.getElementById("play_and_stop_container");
+// const button = document.getElementById("b_collapsible_arrow");
+// const play_and_stop = document.getElementById("play_and_stop_container");
 
-button.addEventListener("click", () => {
-    play_and_stop.classList.toggle("expand");
-});
+// button.addEventListener("click", () => {
+//     play_and_stop.classList.toggle("expand");
+// });
 
 
 //show error and current
@@ -1373,7 +1582,7 @@ function invertVisibility(item){
     }
 }
 
-//id_graph_container_
+// //id_graph_container_
 
 function current_and_error_mod() {
     const div1 = document.getElementById("id_graph_container_1");

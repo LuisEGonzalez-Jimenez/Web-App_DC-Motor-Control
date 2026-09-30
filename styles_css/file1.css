@@ -35,9 +35,37 @@
 
 /* basic elements and their respective insisdes */
 
-
-.top_navigation_bar{
+/*LOADING SCREEN ------------------------------------------------------*/
+.loading_screen{
     position: absolute;
+    top: 0px;
+    left: 0px;
+    z-index: 20;
+    height: 100%;
+    width: 100%;
+    background-color: white;
+    
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-family: Arial, sans-serif;
+    
+}
+#ld_gif{
+    height: 70px; 
+    width: 70px; 
+}
+
+.display_hidden{
+    display: none;
+}
+
+/*NAVIGATION ------------------------------------------------------*/
+.top_navigation_bar{
+    z-index: 5;
+
+    position: fixed;
     top: 0px;
     left: 0px;
     width: 100vw;
@@ -55,13 +83,35 @@
     width: 150px;
 }
 
+#logo_image{
+    height: 40px;
+    margin-left: 20px;
+    margin-right: 20px;
+}
+
+#nav_title{
+
+    margin-left: 20px; 
+    margin-right: 20px;
+}
+
+
+
 
 /* sidebar ----------------------------------------------------------------- */
+.sidebar_margin_paddings_1{
+    margin-top: 0px;
+    margin-bottom: 0px;
+
+    padding-top: 0px;
+    padding-bottom: 0px;
+}
+
 .sidebar-1 {
     background-color: white;
     width: 340px; /*this could vary on phones*/
     height: calc(100vh - var(--nbh));
-    position: fixed;
+    position: absolute;
     top: var(--nbh);
     left: 0;
     
@@ -130,6 +180,11 @@
 
 .system_status{
     font-size: 15px;
+    display: flex;
+    justify-content: center; 
+    align-items: center;     /* vertical */
+
+    padding-left: 10px;
 }
 
 .input_box{
@@ -151,7 +206,6 @@
 
     border-left: 5px solid var(--meblue);
     padding-left: 10px;
-    
 }
 
 
@@ -257,10 +311,8 @@
     width: 310px;
 
     position: fixed;
-    bottom: -543px; /* 575-32*/
+    bottom: 0px; /* 575-32*/
     right:0px;
-
-    transition: linear 2s ease-in-out; /*animation isnt really implemented*/
 
     display: flex;
     flex-direction: column;
@@ -315,3 +367,56 @@
 
 
 
+/* --------------------------------------------- */
+/* motor parameters */
+/* --------------------------------------------- */
+
+.mp_background{
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    position: absolute;
+
+    background-color: rgba(0, 0, 0, 0.3);
+
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+}
+.mp_box{
+    width: 310px;
+    height: 600px;
+    z-index: 11;
+    border-radius: 10px;
+    
+    
+    
+    background-color: var(--megrey);
+    
+    display: flex;
+    flex-direction: column;
+}
+#mp_box_top{
+    width: 310px;
+    height: 40px;
+    border-radius: 10px;
+    
+    
+    background-color: var(--medarkergrey);
+    display: flex;
+    flex-direction: row-reverse;
+    align-items:center;
+    
+}
+#mp_box_contents{
+    width: 310px;
+    height: 550;
+}
+.mp_close{
+    height: 30px;
+    width: 30px;
+    margin-right: 10px;
+}
+.mp_close:hover{
+    filter: brightness(80%);
+}

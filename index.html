@@ -9,22 +9,32 @@
         <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
     </head>
     <body>
+        
+        <div class="loading_screen" id="loading_screen_id">
+                <img src="images\loading.gif" alt="Loading..." id="ld_gif">
+        </div>
+
         <div class="top_navigation_bar">
-            <p style="margin-left: 20px; margin-right: 20px;">navigation bar</p>
+            <img src="images\simulab.png" alt="logo" id="logo_image">
+            <p id="nav_title">DC Motor: Simulation, Identification & Control</p>
             <button id="b_current_and_error" class="nav_button">current and error</button>
         </div>
         <!-- we are gonna have 4 sections -->
         <!-- sidebar -->
         <div id="sb_main" class="sidebar-1">
             
-            <!-- profile and shi -->
+            <!-- profile and shi        -->
             <div class="sidebar_group sbgh2">
-                <div class="sidebar_basic_elements system_status" id="system_id">
+                <div class="sidebar_basic_elements system_status" id="system_id"
+                style="margin-top: 5px; margin-bottom: 5px; padding-top: 0px; padding-bottom: 0px;"
+                >
                     <p>O | System Off</p>
                 </div>
 
             
-                <div class="sidebar_basic_elements input_box">
+                <div class="sidebar_basic_elements input_box"
+                style="margin-top: 5px; margin-bottom: 5px; padding-top: 0px; padding-bottom: 0px;"
+                >
                     <form action="/communicationScript.py">
                         <label class="descriptor" for="vcc">Set Vcc:</label>
                         <input type="number" step="0.01" name="Vcc" id="UI_vcc" value="12">
@@ -85,37 +95,11 @@
                     <button class="pas_buttons" id="b_load">Load</button>
                     <button class="pas_buttons" id="b_save">Save</button>
                 </div>
-                <div class="pas_collapsible_arrow" id="b_collapsible_arrow">
+                <!-- <div class="pas_collapsible_arrow" id="b_collapsible_arrow">
                     <button class="pas_button_arrow">[>]</button>
-                </div>
+                </div> -->
             </div>
-            <div class="sidebar_group">
-                <div class="sidebar_basic_elements">
-                    <form id="myForm" onsubmit="return false;"><label class="descriptor" for="armature_resistance">Armature
-                            resistance:</label>
-                        <div class="formula_input_right">
-                            <math>
-                                <msub>
-                                    <mi>R</mi>
-                                    <mi>a</mi>
-                                </msub>
-                            </math>
-                            <input type="number" step="0.01" name="armature_resistance" id="UI_armature_resistance" class="enter_exectute_graphs" value="1.19" size="6">
-                        </div>
-                    </form>
-                </div><div class="sidebar_basic_elements"><form onsubmit="return false;"><label class="descriptor" for="armature_inductance">Armature inductance:</label><div class="formula_input_right">
-                        <math><msub><mi>L</mi><mi>a</mi></msub></math>
-                    <input type="number" step="0.001" name="armature_inductance" id="UI_armature_inductance" class="enter_exectute_graphs" value="0.013" size="6"></div></form></div><div class="sidebar_basic_elements"><form onsubmit="return false;"><label class="descriptor" for="back_electromotive_force_constant">Back electromotive force constant:</label><div class="formula_input_right">
-                        <math><msub><mi>K</mi><mi>b</mi></msub></math>
-                    <input type="number" step="0.01" name="back_electromotive_force_constant" value="0.78" id="UI_back_electromotive_force_constant" class="enter_exectute_graphs" size="6"></div></form></div><div class="sidebar_basic_elements"><form onsubmit="return false;"><label class="descriptor" for="torque_constant">Torque constant:</label><div class="formula_input_right">
-                        <math><msub><mi>K</mi><mi>t</mi></msub></math>
-                    <input type="number" step="0.01" name="torque_constant" id="UI_torque_constant" class="enter_exectute_graphs" value="0.6" size="6"></div></form></div><div class="sidebar_basic_elements"><form onsubmit="return false;"><label class="descriptor" for="motor_rotor_inertia">Motor rotor inertia:</label><div class="formula_input_right">
-                        <math><msub><mi>J</mi><mi>m</mi></msub></math>
-                    <input type="number" step="0.01" name="motor_rotor_inertia" id="UI_motor_rotor_inertia" class="enter_exectute_graphs" value="0.8" size="6"></div></form></div><div class="sidebar_basic_elements"><form onsubmit="return false;"><label class="descriptor" for="viscous_friction_coefficient">Viscous friction coefficient:</label><div class="formula_input_right">
-                        <math><msub><mi>B</mi><mi>m</mi></msub></math>
-                    <input type="number" step="0.01" name="viscous_friction_coefficient" id="UI_viscous_friction_coefficient" class="enter_exectute_graphs" value="0.1" size="6"></div></form></div>
 
-            </div>
         </div>
         <!-- top left user -->
 

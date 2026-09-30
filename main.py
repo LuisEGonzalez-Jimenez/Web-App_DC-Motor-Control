@@ -24,6 +24,12 @@ async def main():
     promise = js.jsReadyPromise
     await promise
 
+
+    #remove loading screen
+    loading_screen = web.page["#loading_screen_id"]
+    loading_screen.classes.add("display_hidden")
+    
+
 #identifying motor parameters immma write this first till i get it, and then imma understand it.
 
 
@@ -108,14 +114,15 @@ def build_motor():
     #create our simulated motor.
     #this needs more logic, you change the value and nothing changes till you force a save
     #if we are in the sim page, we get the values from the input boxes
-    float(web.page["UI_vcc"].value)
+    ui_vcc = float(web.page["UI_vcc"].value)
     
-    Ra = float(web.page["UI_armature_resistance"].value)
-    La = float(web.page["UI_armature_inductance"].value)
-    Kb = float(web.page["UI_back_electromotive_force_constant"].value)
-    Kt = float(web.page["UI_torque_constant"].value)
-    Jm = float(web.page["UI_motor_rotor_inertia"].value)
-    Bm = float(web.page["UI_viscous_friction_coefficient"].value)
+
+    Ra = float(js.simulate_motor.armature_resistance)
+    La = float(js.simulate_motor.armature_inductance)
+    Kb = float(js.simulate_motor.back_electromotive_force_constant)
+    Kt = float(js.simulate_motor.torque_constant)
+    Jm = float(js.simulate_motor.motor_rotor_inertia)
+    Bm = float(js.simulate_motor.viscous_friction_coefficient)
 
     
     A = np.array([
@@ -142,6 +149,8 @@ def run_simulation(u, x0, how_long, n_samples=1000):
     t_out, output = ct.forced_response(motor, T=time_array, U=u, X0=x0)
     current = output[0]
     omega   = output[1]
+
+
     #we are returning now current and omega instead of only output.
     #aditionally we are changing time array for t_out, which should probably be the same
     #before:  return time_array2, output, u
@@ -270,19 +279,29 @@ async def on_start(event):
 async def on_submit_identification(event=None):
     await js.jsReadyPromise  
     
+    print("called button correctly")
+
     #check what option is selected
-    selected = document.querySelector('input[name="method_identification"]:checked')
-    
+    selected = int(js.sb_state)
+    condis = int(js.sb_condis)
+
+    #Ra = float(js.simulate_motor.armature_resistance) (reference of how to write)
+    # amp = float(js.step.amp)
+
+    print(selected)
     #if selected does exist
-    if not selected:
-        return 0
     
     #assume time input is 5
-    time_amount = 10
+    time_amount = float(web.page["UI_time"].value)
     time_samples = 1000 #this is default
 
-    value = selected.value
-    if value == "Step":
+    STEP = 0
+    SINE = 1
+    PID = 2
+    IDEN = 3
+    
+
+    if selected == STEP:
 
         #these arent loaded so:
         #Ra = float(js.simulate_motor.armature_resistance) (reference of how to write)
@@ -308,7 +327,7 @@ async def on_submit_identification(event=None):
         #def make_step(t, amplitude: float, t0: float = 0.0, offset: float = 0.0):
         u = make_step(time_array, amp, it, offset)
         
-    if value == "Sine_Con":
+    if selected == SINE and condis == CONTINUOUS:
 
         amp = float(js.sine_con.amp)
         if not amp:
@@ -338,7 +357,7 @@ async def on_submit_identification(event=None):
         #def make_sine(t, A: float, omega: float, phi: float = 0.0, delta: float = 0.0):
         u = make_sine(time_array, amp, freq, phase_angle, offset)
     
-    if value == "Sine_Dis":
+    if selected == SINE and condis == DISCRETE:
 
         amp = float(js.sine_con.amp)
         if not amp:
@@ -374,7 +393,7 @@ async def on_submit_identification(event=None):
 
 
 
-    if value == "PID":
+    if selected == PID:
         return 0
     
 
@@ -383,17 +402,17 @@ async def on_submit_identification(event=None):
     with this data we pass it to a function that should output the motors configuration.
     """
     
-    calculate(value, u, time_amount, time_samples)
+    calculate(selected, u, time_amount, time_samples)
 
     #if its step 
 
 window.handleIdentification = on_submit_identification
 
-@when("keydown", ".enter_exectute_graphs")
-def on_key(event):
-    if event.key == "Enter":
-        event.preventDefault()
-        calculate("simulate", 12, 5)
+# @when("keydown", ".enter_exectute_graphs")
+# def on_key(event):
+#     if event.key == "Enter":
+#         event.preventDefault()
+#         calculate("simulate", 12, 5)
 
 
 
@@ -406,4 +425,4 @@ asyncio.ensure_future(main())
     
 
 
-
+main()
