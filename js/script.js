@@ -8,10 +8,12 @@ const IDEN = 3;
 const CONTINUOUS = 0;
 const DISCRETE = 1;
 
-
+const SPEED_AND_VOLTAGE = 0;
+const CURRENT_AND_ERROR = 1;
 //
 window.sb_state = INITIATE; 
 window.sb_condis = CONTINUOUS;
+graphs_state = SPEED_AND_VOLTAGE;
 
 window.simulate_time = 10;
 
@@ -914,17 +916,15 @@ function summon_mp_menu(){
 
 
 }
-// i  dont think i need this arguments as windos are global variables.
-function simulate_area(father){
-    sbg = creating_sidebar_group(father);
 
+function create_area_for_motor_parameters(father){
     const sb_elements = document.createElement('div');
     sb_elements.classList.add('sidebar_basic_elements');
-    sbg.appendChild(sb_elements);
+    father.appendChild(sb_elements);
 
 
     let text = document.createElement('p');
-    text.innerText = "Simulate Motor:  "
+    text.innerText = "Simulated Motor:  "
     sb_elements.appendChild(text)
 
 
@@ -933,6 +933,15 @@ function simulate_area(father){
     btn.innerText = "Edit variables";
     btn.addEventListener("click", () => summon_mp_menu());
     sb_elements.appendChild(btn);
+}
+
+
+
+// i  dont think i need this arguments as windos are global variables.
+function simulate_area(father){
+    sbg = creating_sidebar_group(father);
+
+    create_area_for_motor_parameters(sbg);
     
     //add a time input and a play simulation
     const bf = sbf_basicform(
@@ -952,8 +961,8 @@ function simulate_area(father){
     sbg.appendChild(sb_elements_3);
     
     const btn2 = document.createElement('button')
-    btn.className = "sd_play_simulation";
-    btn2.innerText = "Play Simmulation";
+    btn2.className = "sd_play_simulation";
+    btn2.innerText = "Play Simulation";
     btn2.addEventListener("click", () => window.handleIdentification());
     sb_elements_3.appendChild(btn2)
 
@@ -1510,42 +1519,46 @@ function change_to_identification() {
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
 
-    //create sidebar group with heights:
-    const sbg = creating_sidebar_group(sbc);
-    
-    //create a chooice between step sine and pid
-    sbg.innerHTML = `
-        <form>
-            <p>Select method of identification:</p>
-            <input type="radio" id="step" name="method_identification" value="Step" checked>
-            <label for="Step">Step</label><br>
-            <input type="radio" id="sine_con" name="method_identification" value="Sine_Con">
-            <label for="Sine">Sine continious</label><br>
-            <input type="radio" id="sine_dis" name="method_identification" value="Sine_Dis">
-            <label for="Sine">Sine discrete</label><br>
-            <input type="radio" id="pid" name="method_identification" value="PID">
-            <label for="PID">PID</label>
-        </form>
-    `;
-    
-    const sbg2 = creating_sidebar_group(sbc);
-    // sbg2.innerHTML = `
-    //     <button id="UI_submit_identification">Submit</button>
-    // `;
-    const btn = document.createElement("button");
-    btn.className = "UI_submit_identification";
-    btn.innerText = "Submit";
-    btn.addEventListener("click", () => window.handleIdentification());
-    sbg2.appendChild(btn);
-    
+    sbg2 = creating_sidebar_group(sbc);
+
+    create_area_for_motor_parameters(sbg2);
     
     
     const sbg3 = creating_sidebar_group(sbc);
     //output box really. a p element
     text_box = document.createElement("p");
-    text_box.setAttribute('id', 'motor_predictions');
-    // text_box.;
-    sbg3.appendChild(text_box);
+
+
+    // text_box.innerHTML = JSON.parse(window.identify_results)
+
+    // console.warn(window.identify_results)
+    // console.warn(JSON.parse(window.identify_results))
+    
+
+    // text_box.setAttribute('id', 'motor_predictions');
+    // // text_box.;
+    // sbg3.appendChild(text_box);
+
+    //so we have to see if the values are comparable as in simiar to the 
+
+    if (window.identify_results){       
+        for (const [key, value] of Object.entries(JSON.parse(window.identify_results))) {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.padding = '4px 0';
+
+            const keySpan = document.createElement('span');
+            keySpan.textContent = key;
+
+            const valueSpan = document.createElement('span');
+            valueSpan.textContent = value.toPrecision(3);
+
+            row.appendChild(keySpan);
+            row.appendChild(valueSpan);
+            sbg3.appendChild(row);
+        }
+    }
 
 
     //highlight the bar and unhighlight previous button
@@ -1584,7 +1597,17 @@ function invertVisibility(item){
 
 // //id_graph_container_
 
-function current_and_error_mod() {
+// const SPEED_AND_VOLTAGE = 0;
+// const CURRENT_AND_ERROR = 1;
+
+//we expect a 1 or a 0
+function change_graphs(button_clicked){
+    let count = 1;
+    if(graphs_state == button_clicked){
+        return 0;
+    }
+
+   //change the graphs visivility
     const div1 = document.getElementById("id_graph_container_1");
     const div2 = document.getElementById("id_graph_container_2");
     const div3 = document.getElementById("id_graph_container_3");
@@ -1594,12 +1617,41 @@ function current_and_error_mod() {
     invertVisibility(div2);
     invertVisibility(div3);
     invertVisibility(div4);
+    //change the buttons colors
+
+    let btn1 = document.getElementById("b_speed_and_voltage");
+    let btn2 = document.getElementById("b_current_and_error");
+
+    if(button_clicked == SPEED_AND_VOLTAGE){
+        let temp = btn2;
+        btn2 = btn1;
+        btn1 = temp;
+    }
+    
+
+    btn1.classList.add("nav_button");
+    btn1.classList.remove("nav_button_selected");
+    //button 2 is gonna be the selected one
+    btn2.classList.add("nav_button_selected");
+    btn2.classList.remove("nav_button");
+
+
+
+    graphs_state = button_clicked;
 }
+
+//these 2 can be compacted into one function with proper code design
+
 
 const button_current_error = document.getElementById("b_current_and_error");
 
 button_current_error.addEventListener("click", () => {
-    current_and_error_mod();
+    change_graphs(CURRENT_AND_ERROR);
+});
+const button_speed_voltage = document.getElementById("b_speed_and_voltage");
+
+button_speed_voltage.addEventListener("click", () => {
+    change_graphs(SPEED_AND_VOLTAGE);
 });
 
 

@@ -4,20 +4,28 @@
             python website
         </title>
         <link href="styles_css\file1.css" rel="stylesheet" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
         <link rel="stylesheet" href="https://pyscript.net/releases/2026.7.3/core.css" />
         <script type="module" src="https://pyscript.net/releases/2026.7.3/core.js"></script>
         <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
     </head>
-    <body>
+    <body style="background-color: rgba(243, 245, 246);">
         
         <div class="loading_screen" id="loading_screen_id">
                 <img src="images\loading.gif" alt="Loading..." id="ld_gif">
         </div>
 
         <div class="top_navigation_bar">
-            <img src="images\simulab.png" alt="logo" id="logo_image">
-            <p id="nav_title">DC Motor: Simulation, Identification & Control</p>
-            <button id="b_current_and_error" class="nav_button">current and error</button>
+            <div id="left_navigation_bar">
+                <img src="images\simulab_darker.png" alt="logo" id="logo_image">
+                <p id="nav_title">DC Motor: Simulation, Identification & Control</p>
+            </div>
+            
+            <div id="right_navigation_bar">
+                <button id="b_speed_and_voltage" class="nav_button_selected">Speed & Voltage</button>
+                <button id="b_current_and_error" class="nav_button">Current & Error</button>
+
+            </div>
         </div>
         <!-- we are gonna have 4 sections -->
         <!-- sidebar -->
@@ -66,11 +74,16 @@
             <button type="button"       id="b_identification"    class="sb_button">Iden</button>
         </div>
 
+        <div>
+            div
 
+            div
+        </div>
 
         <!-- graph area -->
         <div class="graph_area">
             <div class="container_graph_1" id="id_graph_container_1">
+                <div></div>
                 <div class="actual_graph" id="plot_area_1"></div>
             </div>
             <div class="container_graph_1" id="id_graph_container_2">
@@ -88,17 +101,14 @@
         <!-- play and stop -->
          <!-- ideaaly this works with button clicks or like space and crtl save -->
         <div id="play_and_stop_container">
-            <div class="play_and_stop" id="UI_play_and_stop">
-                <div class="pas_button_container">
-                    <button class="pas_buttons" id="b_start">Start</button>
-                    <button class="pas_buttons" id="b_stop">Stop</button>
-                    <button class="pas_buttons" id="b_load">Load</button>
-                    <button class="pas_buttons" id="b_save">Save</button>
+                            <div class="play_and_stop" id="UI_play_and_stop">
+                    <div class="pas_button_container">
+                        <button class="pas_buttons" id="b_start"><i class="fa">&#xf04b;</i></button>
+                        <button class="pas_buttons" id="b_stop"><i class="fa fa-stop"></i></button>
+                        <button class="pas_buttons" id="b_load">Load</button>
+                        <button class="pas_buttons" id="b_save">Save</button>
+                    </div>
                 </div>
-                <!-- <div class="pas_collapsible_arrow" id="b_collapsible_arrow">
-                    <button class="pas_button_arrow">[>]</button>
-                </div> -->
-            </div>
 
         </div>
         <!-- top left user -->

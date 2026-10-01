@@ -3,6 +3,7 @@ import control as ct
 import matplotlib.pyplot as plt
 #from scipy.optimize import curve_fit #commented this it doesnt seem as if we are using it
 from scipy.signal import savgol_filter
+import json
 
 from pyscript import web, when, window
 from pyscript import document
@@ -170,7 +171,7 @@ def plot_graphs(time, output, output_label, title, graph_id):
     container = document.getElementById(graph_id)
     iframe = document.createElement("iframe")
     iframe.style.width = "100%"
-    iframe.style.height = "100%"
+    iframe.style.height = "95%"
     iframe.style.border = "none"
 
     iframe.srcdoc = fig.to_html(include_plotlyjs="cdn", full_html=True)
@@ -257,8 +258,12 @@ def calculate(value, u, t, samples: int = 1000):
     #estimate_motor_params(t, v, i, omega, Kt_equals_Kb=True)
     dictionary = estimate_motor_params(time, voltage, current, omega, True)
 
-    #please work
-    document.querySelector("#motor_predictions").innerText = str(dictionary)
+    #how do we send dictionary window variable so that it jsut pastes it in the js
+
+    window.identify_results = json.dumps(dictionary)
+
+
+    # document.querySelector("#motor_predictions").innerText = str(dictionary)
 
 
 
@@ -279,7 +284,6 @@ async def on_start(event):
 async def on_submit_identification(event=None):
     await js.jsReadyPromise  
     
-    print("called button correctly")
 
     #check what option is selected
     selected = int(js.sb_state)
@@ -289,11 +293,13 @@ async def on_submit_identification(event=None):
     # amp = float(js.step.amp)
 
     print(selected)
-    #if selected does exist
     
     #assume time input is 5
     time_amount = float(web.page["UI_time"].value)
     time_samples = 1000 #this is default
+
+    print("time amount:")
+    print(time_amount)
 
     STEP = 0
     SINE = 1
@@ -301,21 +307,23 @@ async def on_submit_identification(event=None):
     IDEN = 3
     
 
-    if selected == STEP:
 
+    if selected == STEP:
         #these arent loaded so:
         #Ra = float(js.simulate_motor.armature_resistance) (reference of how to write)
-        amp = float(js.step.amp)
+        amp = float(web.page["UI_amp"].value)
+        print(amp)
         if not amp:
             print("no amp received")
             amp = 0
 
-        it = float(js.step.it)
+        it = float(web.page["UI_it"].value)
+        print(it)
         if not it:
             print("no inital time received")
             it = 0
 
-        offset = float(js.step.offset)
+        offset = float(web.page["UI_offset"].value)
         if not offset:
             print("no offset received")
             offset = 0
@@ -329,23 +337,23 @@ async def on_submit_identification(event=None):
         
     if selected == SINE and condis == CONTINUOUS:
 
-        amp = float(js.sine_con.amp)
+        amp = float(web.page["UI_amp"].value)
         if not amp:
             print("no amp given")
             amp = 0
-        freq = float(js.sine_con.freq)
+        freq = float(web.page["UI_freq"].value)
         if not freq:
             print("no freq given")
             freq = 0
-        phase_angle = float(js.sine_con.phase_angle)
+        phase_angle = float(web.page["UI_phase_angle"].value)
         if not phase_angle:
             print("no phase_angle given")
             phase_angle = 0
-        offset = float(js.sine_con.offset)
+        offset = float(web.page["UI_offset"].value)
         if not offset:
             print("no offset given")
             offset = 0
-        # period = js.sine_dis.period
+        # period = web.page["UI_period"].value
         # if not period:
         #     print("no period given")
         #     period = 0
@@ -359,23 +367,23 @@ async def on_submit_identification(event=None):
     
     if selected == SINE and condis == DISCRETE:
 
-        amp = float(js.sine_con.amp)
+        amp = float(web.page["UI_amp"].value)
         if not amp:
             print("no amp given")
             amp = 0
-        freq = float(js.sine_con.freq)
+        freq = float(web.page["UI_freq"].value)
         if not freq:
             print("no freq given")
             freq = 0
-        phase_angle = float(js.sine_con.phase_angle)
+        phase_angle = float(web.page["UI_phase_angle"].value)
         if not phase_angle:
             print("no phase_angle given")
             phase_angle = 0
-        offset = float(js.sine_con.offset)
+        offset = float(web.page["UI_offset"].value)
         if not offset:
             print("no offset given")
             offset = 0
-        period = float(js.sine_dis.period)
+        period = float(web.page["UI_period"].value)
         if not period:
             print("no period given")
             period = 1

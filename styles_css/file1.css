@@ -73,15 +73,50 @@
     background-color: var(--medarkergrey);
 
 
+    /*so that the items beneath are ordered left to right*/
     display: flex;
     align-items: center; /*this counts as row but centered*/
-    
+    justify-content:flex-start;
 }
 
-.nav_button{
-    height: 80%;
-    width: 150px;
+#left_navigation_bar{
+    height: 100%;
+    width: 50%;
+    
+    display: flex;
+    align-items: center; /*this counts as row but centered*/
 }
+
+#right_navigation_bar{
+    height: 100%;
+    width: 50%;
+
+    display: flex;
+    align-items:center;
+    justify-content:flex-end;
+
+}
+
+
+.nav_button{
+    height: 100%;
+    width: 125px;
+    
+    border-radius: 0%;
+    border-width: 0px;
+    background-color: var(--medarkergrey);
+    
+}
+.nav_button_selected{
+    height: 100%;
+    width: 125px;
+    
+    border-radius: 0%;
+    border-width: 0px;
+    background-color: var(--medarkergrey);
+    background-color: var(--megrey);
+}
+
 
 #logo_image{
     height: 40px;
@@ -276,7 +311,8 @@
 .graph_area{
     background-color: var(--megrey);
     height: calc(100vh - var(--nbh));
-    width: calc(100vw - 400px);
+    /*400 is the size of the sidebar, 25 pixels is the size of the scroll helping bar to the right that missaligns the graphed area in edge */
+    width: calc(100vw - 400px - 25px); 
     position: fixed;
     top: var(--nbh);
     right: 0px;
@@ -360,6 +396,9 @@
 .pas_buttons{
     height: 80%;
     width: 20%;
+    font-size: 15px;
+    color: rgba(51, 51, 51);
+    border-width: 0px;
 }
 .container_for_simulate_data{
     background-color: aliceblue;
@@ -375,7 +414,9 @@
     width: 100%;
     height: 100%;
     z-index: 10;
-    position: absolute;
+    position: fixed;
+    top: 0px;
+    left: 0px;
 
     background-color: rgba(0, 0, 0, 0.3);
 
