@@ -10,9 +10,15 @@ const DISCRETE = 1;
 
 const SPEED_AND_VOLTAGE = 0;
 const CURRENT_AND_ERROR = 1;
-//
+
+const SIMULATED_CONTROL = 0;
+const REAL_TIME_CONTROL = 1;
+const SYSTEM_IDENTIFICATION = 2;
+
+
 window.sb_state = INITIATE; 
 window.sb_condis = CONTINUOUS;
+window.sim_area = SIMULATED_CONTROL;
 graphs_state = SPEED_AND_VOLTAGE;
 
 window.simulate_time = 10;
@@ -935,11 +941,47 @@ function create_area_for_motor_parameters(father){
     sb_elements.appendChild(btn);
 }
 
+function sim_real_identification(father){
+    const buttonContainer = document.createElement("div");
+    buttonContainer.classList.add("sri_area");
+    sbg.appendChild(buttonContainer);
+
+    //show correct selected one.
+
+    const button_sim_1 = document.createElement("button");
+    button_sim_1.innerText = "Simulated control";
+    button_sim_1.classList.add("sri_button_selected");
+    buttonContainer.appendChild(button_sim_1);
+
+    const button_sim_2 = document.createElement("button");
+    button_sim_2.innerText = "Real Time Control";
+    button_sim_2.classList.add("sri_button");
+    buttonContainer.appendChild(button_sim_2);
+
+    const button_sim_3 = document.createElement("button");
+    button_sim_3.innerText = "System Identification";
+    button_sim_3.classList.add("sri_button");
+    buttonContainer.appendChild(button_sim_3);
+
+    //assing funtions to each of these.
+    /*
+    - change colors of buttons.
+    - check if we want to delete the set vcc.
+    - play and stop modified, only needed buttons.
+
+
+    - maybe save files and shi. and data.
+    */
+
+}
 
 
 // i  dont think i need this arguments as windos are global variables.
 function simulate_area(father){
     sbg = creating_sidebar_group(father);
+
+    //create area to select mode
+    sim_real_identification(sbg);
 
     create_area_for_motor_parameters(sbg);
     
@@ -957,14 +999,99 @@ function simulate_area(father){
     sbg.appendChild(bf);
     
     const sb_elements_3 = document.createElement('div');
-    sb_elements_3.classList.add('sidebar_basic_elements');
+    sb_elements_3.classList.add('sidebar_basic_elements-no_padding');
     sbg.appendChild(sb_elements_3);
+
+
+    // creating the section play wihthin sidebar simulated area.
+    //todo vuttons are still called pas button swhen they shoud be called either simulated area sim real ident : sri_buttons_something
+
+    /*
+    const SIMULATED_CONTROL = 0;
+    const REAL_TIME_CONTROL = 1;
+    const SYSTEM_IDENTIFICATION = 2;
+
+
+
+    sri_buttons.push(startButton);
+    sri_buttons.push(stopButton);
+    sri_buttons.push(loadButton);
+    sri_buttons.push(saveButton);
     
+    */
+
+
+    
+    const sri_button_container = document.createElement("div");
+    sri_button_container.className = "pas_button_container";
+
+
+    //creating buttons that we need for each window in particular
+
+    startButton_sim = { id: "b_start_sim", icon: "&#xf04b;" };
+    startButton_real = { id: "b_start_real", icon: "&#xf04b;" };
+    startButton_identify = { id: "b_start_identify", icon: "&#xf04b;" };
+    stopButton = { id: "b_stop", iconClass: "fa fa-stop" };
+    loadButton = { id: "b_load", text: "Load" };
+    saveButton = { id: "b_save", text: "Save" };
+    
+    
+    let sri_buttons = [];
+
+    if(SIMULATED_CONTROL == window.sim_area){
+        sri_buttons.push(startButton_sim);
+        sri_buttons.push(saveButton);
+        console.warn("we know we in the simulated area so we added shi to the sri buttons")
+        console.warn(sri_buttons)
+    }else if(REAL_TIME_CONTROL== window.sim_area){
+        sri_buttons.push(startButton_real);
+        sri_buttons.push(stopButton);
+        sri_buttons.push(saveButton);
+        
+    }else if(SYSTEM_IDENTIFICATION== window.sim_area){
+        sri_buttons.push(startButton_identify);
+        sri_buttons.push(loadButton);
+        sri_buttons.push(saveButton);
+    }
+
+    sri_buttons.forEach(({ id, icon, iconClass, text }) => {
+        const button = document.createElement("button");
+        button.className = "pas_buttons";
+        button.id = id;
+
+        if (icon) {
+            const i = document.createElement("i");
+            i.className = "fa";
+            i.innerHTML = icon;
+            button.appendChild(i);
+        } else if (iconClass) {
+            const i = document.createElement("i");
+            i.className = iconClass;
+            button.appendChild(i);
+        } else {
+            button.textContent = text;
+        }
+
+        //assining functions:
+        if(id == "b_start_sim"){
+            button.addEventListener("click", () => window.on_play_simulation_button_js());
+        }
+
+        sri_button_container.appendChild(button);
+    });
+
+    sb_elements_3.appendChild(sri_button_container);
+
+
+    
+    /*
     const btn2 = document.createElement('button')
     btn2.className = "sd_play_simulation";
     btn2.innerText = "Play Simulation";
-    btn2.addEventListener("click", () => window.handleIdentification());
+    btn2.addEventListener("click", () => window.on_play_simulation_button_js());
     sb_elements_3.appendChild(btn2)
+    
+    */
 
 
     //save this to a variable the results. to a window variable

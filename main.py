@@ -131,6 +131,7 @@ def build_motor():
         [ Kt / Jm, -Bm / Jm],
     ], dtype=float)
     #current consideration
+    #teacher ads -1/Jm instead of a 0. this is the extra input area
     B = np.array([[1 / La], [0]], dtype=float)
     #out put
     C = np.array([[1, 0],
@@ -267,7 +268,7 @@ def calculate(value, u, t, samples: int = 1000):
 
 
 
-    
+## this is going to be outdated and no longer usefull in a few iteratios
 @when("click", "#b_start")
 async def on_start(event):
     await js.jsReadyPromise  
@@ -281,7 +282,7 @@ async def on_start(event):
 
 
 #step simulate and more prob
-async def on_submit_identification(event=None):
+async def on_play_simulation_button_py(event=None):
     await js.jsReadyPromise  
     
 
@@ -414,7 +415,7 @@ async def on_submit_identification(event=None):
 
     #if its step 
 
-window.handleIdentification = on_submit_identification
+window.on_play_simulation_button_js = on_play_simulation_button_py
 
 # @when("keydown", ".enter_exectute_graphs")
 # def on_key(event):
