@@ -115,7 +115,8 @@ def build_motor():
     #create our simulated motor.
     #this needs more logic, you change the value and nothing changes till you force a save
     #if we are in the sim page, we get the values from the input boxes
-    ui_vcc = float(web.page["UI_vcc"].value)
+    #we currently dont need this unless we have the real motor, and this function will never see that becuase we are building the simulated motor
+    # ui_vcc = float(web.page["UI_vcc"].value)
     
 
     Ra = float(js.simulate_motor.armature_resistance)

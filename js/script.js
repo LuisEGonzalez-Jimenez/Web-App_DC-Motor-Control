@@ -3,7 +3,7 @@ const INITIATE = -1;
 const STEP = 0;
 const SINE = 1;
 const PID = 2;
-const IDEN = 3;
+
 
 const CONTINUOUS = 0;
 const DISCRETE = 1;
@@ -11,6 +11,7 @@ const DISCRETE = 1;
 const SPEED_AND_VOLTAGE = 0;
 const CURRENT_AND_ERROR = 1;
 
+const SAME_AS_LAST = -1;
 const SIMULATED_CONTROL = 0;
 const REAL_TIME_CONTROL = 1;
 const SYSTEM_IDENTIFICATION = 2;
@@ -22,7 +23,7 @@ window.sim_area = SIMULATED_CONTROL;
 graphs_state = SPEED_AND_VOLTAGE;
 
 window.simulate_time = 10;
-
+window.real_vcc = 12;
 
 window.step = {
     amp: 0,
@@ -756,8 +757,6 @@ function change_button_highlights(current_button){
         b_previous_button = document.getElementById("b_pid");
     } else if (window.sb_state == SINE) {
         b_previous_button = document.getElementById("b_sine");
-    } else if (window.sb_state == IDEN) {
-        b_previous_button = document.getElementById("b_identification");
     } else if (window.sb_state == INITIATE) {
         return STEP; //if we are initiating there is no reason to change anything
     }
@@ -772,8 +771,6 @@ function change_button_highlights(current_button){
         current_button_name = "b_pid";
     } else if (current_button == SINE) {
         current_button_name = "b_sine";
-    } else if (current_button == IDEN) {
-        current_button_name = "b_identification";
     }
 
 
@@ -941,93 +938,281 @@ function create_area_for_motor_parameters(father){
     sb_elements.appendChild(btn);
 }
 
-function sim_real_identification(father){
-    const buttonContainer = document.createElement("div");
-    buttonContainer.classList.add("sri_area");
-    sbg.appendChild(buttonContainer);
 
-    //show correct selected one.
+function create_system_and_vcc_area(father){
+    const sidebarGroup = document.createElement("div");
+    sidebarGroup.className = "sidebar_group sbgh2";
 
-    const button_sim_1 = document.createElement("button");
-    button_sim_1.innerText = "Simulated control";
-    button_sim_1.classList.add("sri_button_selected");
-    buttonContainer.appendChild(button_sim_1);
-
-    const button_sim_2 = document.createElement("button");
-    button_sim_2.innerText = "Real Time Control";
-    button_sim_2.classList.add("sri_button");
-    buttonContainer.appendChild(button_sim_2);
-
-    const button_sim_3 = document.createElement("button");
-    button_sim_3.innerText = "System Identification";
-    button_sim_3.classList.add("sri_button");
-    buttonContainer.appendChild(button_sim_3);
-
-    //assing funtions to each of these.
-    /*
-    - change colors of buttons.
-    - check if we want to delete the set vcc.
-    - play and stop modified, only needed buttons.
+    const systemStatus = document.createElement("div");
+    systemStatus.className = "sidebar_basic_elements system_status";
+    systemStatus.id = "system_id";
 
 
-    - maybe save files and shi. and data.
-    */
+    systemStatus.style.marginTop = "5px";
+    systemStatus.style.marginBottom = "5px";
 
+    systemStatus.style.paddingTop = "0px";
+    systemStatus.style.paddingBottom = "0px";
+
+
+    const statusText = document.createElement("p");
+    statusText.textContent = "O | System Off";
+
+    systemStatus.appendChild(statusText);
+    sidebarGroup.appendChild(systemStatus);
+    father.appendChild(sidebarGroup);
 }
 
 
-// i  dont think i need this arguments as windos are global variables.
-function simulate_area(father){
-    sbg = creating_sidebar_group(father);
+//while it is a global varibale the selected button, it is also when this is called that this variable represents the "previous state of the button."
+function sim_real_identification(father, selected_button){
+    const buttonContainer = document.createElement("div");
+    buttonContainer.classList.add("sri_area");
+    father.appendChild(buttonContainer);
 
-    //create area to select mode
-    sim_real_identification(sbg);
+    //show correct selected one.
+    //i don thighlitgh the correct one.
 
-    create_area_for_motor_parameters(sbg);
+    const button_sim_1 = document.createElement("button");
+    button_sim_1.innerText = "Simulated control";
+    if(selected_button == SIMULATED_CONTROL){
+        button_sim_1.classList.add("sri_button_selected");
+    } else{
+        button_sim_1.classList.add("sri_button");
+    }
+    button_sim_1.id = "b_simulated_control";
+    buttonContainer.appendChild(button_sim_1);
     
-    //add a time input and a play simulation
-    const bf = sbf_basicform(
-        "/communicationScript.py",
-        "time",
-        "Time:",
-        "T",
-        "number",
-        0.01,
-        window.simulate_time,
-        window.simulate_time
-    );
-    sbg.appendChild(bf);
+    const button_sim_2 = document.createElement("button");
+    button_sim_2.innerText = "Real Time Control";
+    if(selected_button == REAL_TIME_CONTROL){
+        button_sim_2.classList.add("sri_button_selected");
+    } else{
+        button_sim_2.classList.add("sri_button");
+    }
+    button_sim_2.id = "b_real_time_control";
+    buttonContainer.appendChild(button_sim_2);
     
-    const sb_elements_3 = document.createElement('div');
-    sb_elements_3.classList.add('sidebar_basic_elements-no_padding');
-    sbg.appendChild(sb_elements_3);
+    const button_sim_3 = document.createElement("button");
+    button_sim_3.innerText = "System Identification";
+    if(selected_button == SYSTEM_IDENTIFICATION){
+        button_sim_3.classList.add("sri_button_selected");
+    } else{
+        button_sim_3.classList.add("sri_button");
+    }
+    button_sim_3.id = "b_system_identification";
+    buttonContainer.appendChild(button_sim_3);
+    
+    //assing funtions to each of these.
+    button_sim_1.addEventListener("click", () => {
+        simulate_area(father, SIMULATED_CONTROL);
+    });
+    button_sim_2.addEventListener("click", () => {
+        simulate_area(father, REAL_TIME_CONTROL);
+    });
+    button_sim_3.addEventListener("click", () => {
+        simulate_area(father, SYSTEM_IDENTIFICATION);
+    });
 
 
-    // creating the section play wihthin sidebar simulated area.
-    //todo vuttons are still called pas button swhen they shoud be called either simulated area sim real ident : sri_buttons_something
+
+
+}
+
+function change_sim_area_buttons_colors(selected_button){
+    
+    let b_previous_button;
+    if (window.sim_area == SIMULATED_CONTROL) {
+        b_previous_button = document.getElementById("b_simulated_control");
+    } else if (window.sim_area == REAL_TIME_CONTROL) {
+        b_previous_button = document.getElementById("b_real_time_control");
+    } else if (window.sim_area == SYSTEM_IDENTIFICATION) {
+        b_previous_button = document.getElementById("b_system_identification");
+    } 
+    
+    
+    let selected_button_element;
+    if (selected_button == SIMULATED_CONTROL) {
+        selected_button_element = document.getElementById("b_simulated_control");
+    } else if (selected_button == REAL_TIME_CONTROL) {
+        selected_button_element = document.getElementById("b_real_time_control");
+    } else if (selected_button == SYSTEM_IDENTIFICATION) {
+        selected_button_element = document.getElementById("b_system_identification");
+    } 
+    
+    
+    b_previous_button.classList.add("sri_button");
+    b_previous_button.classList.remove("sri_button_selected");
+    
+    selected_button_element.classList.remove("sri_button");
+    selected_button_element.classList.add("sri_button_selected");
+
+    return selected_button; ///we return the button that is the new correct
+
+}
+
+function get_last_predicted_values(father){
+    //this is supposed to have complex logic on how to get previous gotten data that lives in the python file. 
+    /*
+    this is gonna be a dilemma because currently our libraries are in python.
+
+    everytime we graoh somethign we could prepredict what the values are and then just get them and showem here from the python file.
+
+    or have 2 assigned events. and js events awaits for python promise. i like this much more.
+    */
+
+    
+
+    const sbg = creating_sidebar_group(father);
+    sbg.style.width = '270px';
+    sbg.style.paddingLeft = '20px';
+    
+
+    if (window.identify_results){       
+        for (const [key, value] of Object.entries(JSON.parse(window.identify_results))) {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.padding = '4px 0';
+            row.classList.add("sri_results")
+
+            const keySpan = document.createElement('span');
+            keySpan.textContent = key;
+
+            const valueSpan = document.createElement('span');
+            valueSpan.textContent = value.toPrecision(3);
+
+            row.appendChild(keySpan);
+            row.appendChild(valueSpan);
+            sbg.appendChild(row);
+        }
+    }
+}
+
+//do we call upon this function when the user clicks the button again as in step and so on.
+function simulate_area(father, button_clicked=SAME_AS_LAST){
+
+
+    let sbg_sri;
 
     /*
-    const SIMULATED_CONTROL = 0;
-    const REAL_TIME_CONTROL = 1;
-    const SYSTEM_IDENTIFICATION = 2;
+    case 1
+        initialize 
+        SIMULATEd control
 
-
-
-    sri_buttons.push(startButton);
-    sri_buttons.push(stopButton);
-    sri_buttons.push(loadButton);
-    sri_buttons.push(saveButton);
+    case 2
+        step "because it hasnt updated"
+        same as last
+    
+        window sim area == simulated control
     
     */
 
 
+    //so when we change func as in from step to sine, i would expect it to execute all the same.
+
+    //if we arent in initiate OR we are moving from step to sine. because the we want the button to stay the same as the last
+    //ive spent too much time here lets just do it fast.
+
+    //what information do i need.
+
+    //i need to know if we are initializing.
+    //i need to know weather we are changing from sine to step.
+
+    //if we are changing then i want button clicked to be the same as the last, AND to create it from 0.
+
+    if((window.sb_state == INITIATE) || (button_clicked == SAME_AS_LAST)){
+        //we are in initiate:
+        console.warn("we create the sidebar from zero.")
+        sbg_sri = creating_sidebar_group(father);
+        sbg_sri.id = "sri_section_container";
+        sbg_sri.style.marginTop = "10px";
+
+
+        //if it is initiate the reason we are here, then it should be fine
+        button_clicked = window.sim_area;
+
+
+    }else{
+        //we are in a staet which the group still exists.
+
+        //you clicked the same button u buffun, it only means you get a zero back, u peasent. (might need to remove this coment later on. (imma forget this fs))
+        if(button_clicked == window.sim_area){
+            return 0;
+        }
+
+        sbg_sri = document.getElementById("sri_section_container");
+        sbg_sri.replaceChildren();
+        console.warn("removed all sri kids, but sri group should still exists.");
+        
+    }
+
     
+
+    
+    
+
+    //create area to select mode
+    sim_real_identification(sbg_sri, button_clicked);
+
+
+
+    
+    
+    
+    if(button_clicked == SIMULATED_CONTROL){
+        
+        //variable area depending on the button selected.
+        
+        create_area_for_motor_parameters(sbg_sri);
+        
+        //add a time input and a play simulation
+        const bf = sbf_basicform( "/communicationScript.py", "time", "Time:", "T", "number", 0.01, window.real_vcc , 7);
+        sbg_sri.appendChild(bf);
+        
+        
+    }else if(button_clicked == REAL_TIME_CONTROL){
+        
+        const systemStatus = document.createElement("div");
+        systemStatus.className = "sidebar_basic_elements system_status";
+        systemStatus.id = "system_id";
+        
+        systemStatus.style.marginTop = "5px";
+        systemStatus.style.marginBottom = "5px";
+        systemStatus.style.paddingTop = "0px";
+        systemStatus.style.paddingBottom = "0px";
+        
+        const statusText = document.createElement("p");
+        statusText.textContent = "O | System Off";
+        
+        systemStatus.appendChild(statusText);
+        sbg_sri.appendChild(systemStatus);
+        
+        //does it add this empty?
+        const bf = sbf_basicform( "/communicationScript.py", "vcc", "vcc:", " ", "number", 0.01, window.simulate_time, 10);
+        sbg_sri.appendChild(bf);
+        
+        
+        console.warn("everything got appended?");
+        
+        
+        
+    }
+    // else if(button_clicked == SYSTEM_IDENTIFICATION){
+        
+    // }
+    
+    
+    
+    
+    
+    //button below the inputs for each simulation
     const sri_button_container = document.createElement("div");
     sri_button_container.className = "pas_button_container";
-
-
+    
+    
     //creating buttons that we need for each window in particular
-
+    
     startButton_sim = { id: "b_start_sim", icon: "&#xf04b;" };
     startButton_real = { id: "b_start_real", icon: "&#xf04b;" };
     startButton_identify = { id: "b_start_identify", icon: "&#xf04b;" };
@@ -1037,28 +1222,27 @@ function simulate_area(father){
     
     
     let sri_buttons = [];
-
-    if(SIMULATED_CONTROL == window.sim_area){
+    
+    if(SIMULATED_CONTROL == button_clicked){
         sri_buttons.push(startButton_sim);
         sri_buttons.push(saveButton);
-        console.warn("we know we in the simulated area so we added shi to the sri buttons")
-        console.warn(sri_buttons)
-    }else if(REAL_TIME_CONTROL== window.sim_area){
+        
+    }else if(REAL_TIME_CONTROL== button_clicked){
         sri_buttons.push(startButton_real);
         sri_buttons.push(stopButton);
         sri_buttons.push(saveButton);
         
-    }else if(SYSTEM_IDENTIFICATION== window.sim_area){
+    }else if(SYSTEM_IDENTIFICATION== button_clicked){
         sri_buttons.push(startButton_identify);
         sri_buttons.push(loadButton);
         sri_buttons.push(saveButton);
     }
-
+    
     sri_buttons.forEach(({ id, icon, iconClass, text }) => {
         const button = document.createElement("button");
         button.className = "pas_buttons";
         button.id = id;
-
+        
         if (icon) {
             const i = document.createElement("i");
             i.className = "fa";
@@ -1071,30 +1255,27 @@ function simulate_area(father){
         } else {
             button.textContent = text;
         }
-
+        
         //assining functions:
         if(id == "b_start_sim"){
             button.addEventListener("click", () => window.on_play_simulation_button_js());
         }
-
+        if(id == "b_start_identify"){
+            button.addEventListener("click", () => get_last_predicted_values(sbg_sri));
+        }
+        
         sri_button_container.appendChild(button);
     });
 
+    //create container where play and shi will go
+    const sb_elements_3 = document.createElement('div');
+    sb_elements_3.classList.add('sidebar_basic_elements-no_padding');
     sb_elements_3.appendChild(sri_button_container);
+    sbg_sri.appendChild(sb_elements_3);
 
 
-    
-    /*
-    const btn2 = document.createElement('button')
-    btn2.className = "sd_play_simulation";
-    btn2.innerText = "Play Simulation";
-    btn2.addEventListener("click", () => window.on_play_simulation_button_js());
-    sb_elements_3.appendChild(btn2)
-    
-    */
-
-
-    //save this to a variable the results. to a window variable
+    // window.sim_area = change_sim_area_buttons_colors(button_clicked);
+    window.sim_area  = button_clicked;
 
 }
 
@@ -1140,7 +1321,7 @@ function change_to_sine(condis) {
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
 
-    simulate_area(sbc);
+    simulate_area(sbc, SAME_AS_LAST);
 
     //create sidebar group with heights:
     const sbg = creating_sidebar_group(sbc);
@@ -1284,6 +1465,7 @@ function change_to_sine(condis) {
 
 
 //change to step
+//this order reveals that javascript runs the functions first, and then goes trhough the code, which makes it work but it probably shoudnt.
 document.getElementById("b_step").addEventListener("click", change_to_step);
 
 function change_to_step() {
@@ -1302,9 +1484,14 @@ function change_to_step() {
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
     
-    simulate_area(sbc);
+    //create the simulate area (its gonna have to be renamed as it doesnt stand for that now)
+    simulate_area(sbc, SAME_AS_LAST);
 
-    //create sidebar group with heights:
+
+
+
+    //actual content of the step side of the sidebar
+    //create sidebar group
     const sbg = creating_sidebar_group(sbc);
 
 
@@ -1320,59 +1507,28 @@ function change_to_step() {
 
 
 
-    //function sbf_basicform(action, for_d, label_text, Unitofmeasure, type, step)
-    const bf = sbf_basicform(
-        "/communicationScript.py",
-        "amp",
-        "Amplitude:",
-        dictionaryUnitsOfMeasure["amp"],
-        "number",
-        0.01,
-        window.step["amp"]
-    );
+    //3 inputs for step
+    const bf = sbf_basicform( "/communicationScript.py", "amp", "Amplitude:", dictionaryUnitsOfMeasure["amp"], "number", 0.01, window.step["amp"] );
     sbg.appendChild(bf);
 
-    const freq = sbf_basicform(
-        "/communicationScript.py",
-        "it",
-        "Initial Time:",
-        dictionaryUnitsOfMeasure["timezero"],
-        "number",
-        0.01,
-        window.step["it"]
-    );
+    const freq = sbf_basicform( "/communicationScript.py", "it", "Initial Time:", dictionaryUnitsOfMeasure["timezero"], "number", 0.01, window.step["it"] );
     sbg.appendChild(freq);
 
-    const offset = sbf_basicform(
-        "/communicationScript.py",
-        "offset",
-        "Offset:",
-        dictionaryUnitsOfMeasure["delta"],
-        "number",
-        0.01,
-        window.step["offset"]
-    );
+    const offset = sbf_basicform( "/communicationScript.py", "offset", "Offset:", dictionaryUnitsOfMeasure["delta"], "number", 0.01, window.step["offset"] );
     sbg.appendChild(offset);
 
 
-
-    const sbg2 = document.createElement('div');
-    sbg2.classList.add('sidebar_group');
-    sbg2.classList.add('sbgh3');
-    sbc.appendChild(sbg2);
+    //creating the second box
+    const sbg2 = creating_sidebar_group(sbc);
 
     sbg2.innerHTML = SliderDutyCycleHtml;
 
-    const sign = sbf_basicform(
-        "/communicationScript.py",
-        "sign",
-        "Sign V(t):",
-        dictionaryUnitsOfMeasure["none"],
-        "number",
-        0.01
-    );
+    const sign = sbf_basicform( "/communicationScript.py", "sign", "Sign V(t):", dictionaryUnitsOfMeasure["none"], "number", 0.01);
     sbg2.appendChild(sign);
+    
 
+
+    //this is needed. in fact im impressed this works. id think browser timings would mess this up:
     const SliderDutyCycle = document.getElementById("SliderDutyCycle");
     const UI_dutycycle = document.getElementById("UI_dutycycle");
 
@@ -1386,6 +1542,13 @@ function change_to_step() {
         SliderDutyCycle.value = UI_dutycycle.value;
     });
 
+
+
+
+
+
+
+    //we change to step change the button highlights
     window.sb_state = change_button_highlights(STEP);
 
 
@@ -1433,7 +1596,7 @@ function change_to_PID(condis) {
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
 
-    simulate_area(sbc);
+    simulate_area(sbc, SAME_AS_LAST);
 
     //create sidebar group with heights:
     const sbg = creating_sidebar_group(sbc);
@@ -1622,76 +1785,6 @@ function change_to_PID(condis) {
 }
 
 
-
-
-//change to identification
-document.getElementById("b_identification").addEventListener("click", () => {
-    change_to_identification();
-});
-
-function change_to_identification() {
-
-    //check if we are not there currently
-    if (window.sb_state == IDEN) {
-        return 0;
-    }
-
-    //info we need:
-    const place = document.getElementById("sb_main");
-
-
-    //delete all from side bar
-    clean_sidebar(place);
-
-    //creating sidebar
-    const sbc = creating_sidebar_contents(place);
-
-    sbg2 = creating_sidebar_group(sbc);
-
-    create_area_for_motor_parameters(sbg2);
-    
-    
-    const sbg3 = creating_sidebar_group(sbc);
-    //output box really. a p element
-    text_box = document.createElement("p");
-
-
-    // text_box.innerHTML = JSON.parse(window.identify_results)
-
-    // console.warn(window.identify_results)
-    // console.warn(JSON.parse(window.identify_results))
-    
-
-    // text_box.setAttribute('id', 'motor_predictions');
-    // // text_box.;
-    // sbg3.appendChild(text_box);
-
-    //so we have to see if the values are comparable as in simiar to the 
-
-    if (window.identify_results){       
-        for (const [key, value] of Object.entries(JSON.parse(window.identify_results))) {
-            const row = document.createElement('div');
-            row.style.display = 'flex';
-            row.style.justifyContent = 'space-between';
-            row.style.padding = '4px 0';
-
-            const keySpan = document.createElement('span');
-            keySpan.textContent = key;
-
-            const valueSpan = document.createElement('span');
-            valueSpan.textContent = value.toPrecision(3);
-
-            row.appendChild(keySpan);
-            row.appendChild(valueSpan);
-            sbg3.appendChild(row);
-        }
-    }
-
-
-    //highlight the bar and unhighlight previous button
-    window.sb_state = change_button_highlights(IDEN);
-    return 0;
-}
 
 
 
