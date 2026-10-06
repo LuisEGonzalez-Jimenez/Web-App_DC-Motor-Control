@@ -269,13 +269,7 @@ def calculate(value, u, t, samples: int = 1000):
 
 
 
-## this is going to be outdated and no longer usefull in a few iteratios
-@when("click", "#b_start")
-async def on_start(event):
-    await js.jsReadyPromise  
-    print("clicked start button")
-    #this is super hard coded TODO: fix this
-    calculate("simulate", 12, 5) 
+
 
 
 
