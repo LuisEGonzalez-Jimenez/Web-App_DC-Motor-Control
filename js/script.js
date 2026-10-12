@@ -1120,6 +1120,7 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
     //i need to know weather we are changing from sine to step.
 
     //if we are changing then i want button clicked to be the same as the last, AND to create it from 0.
+    let cycleDutyExists = false;
 
     if((window.sb_state == INITIATE) || (button_clicked == SAME_AS_LAST)){
         //we are in initiate:
@@ -1143,11 +1144,33 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
 
         sbg_sri = document.getElementById("sri_section_container");
         sbg_sri.replaceChildren();
+
+
+
+
+        //SECTION IN WHICH WE DECIDE TO HIDE STUFF WHEN IN DIFFERENT AREAS OF THE CONTROL
+        /*
+            - basically when we enter different areas, for example in step we hide stuff at differnet areas of the sim
+            - we only want to see duty cycle when in real time control.
+            -  in identification we probably dont want to see anything.
+        */
+        //if we are in step and changing to real motor.
+        if(window.sb_state == STEP && button_clicked == REAL_TIME_CONTROL)
+            invertVisibility(document.getElementById("CycleDutyBox"));
+        
+        if(window.sb_state == STEP && button_clicked != REAL_TIME_CONTROL && window.sim_area == REAL_TIME_CONTROL)
+            invertVisibility(document.getElementById("CycleDutyBox"));
+
+
         console.warn("removed all sri kids, but sri group should still exists.");
         
     }
 
     
+    //if we are in initiate, we cant really change the visibility of the object
+    //if we are on changing between buttons, then we can change it.
+    //as long as the button is not same as last. we should be fine.
+
 
     
     
@@ -1169,7 +1192,7 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
         //add a time input and a play simulation
         const bf = sbf_basicform( "/communicationScript.py", "time", "Time:", "T", "number", 0.01, window.real_vcc , 7);
         sbg_sri.appendChild(bf);
-        
+
         
     }else if(button_clicked == REAL_TIME_CONTROL){
         
@@ -1518,16 +1541,22 @@ function change_to_step() {
     sbg.appendChild(offset);
 
 
-    //creating the second box
+
+
+
+
+
+    //slider duty box
     const sbg2 = creating_sidebar_group(sbc);
+    sbg2.id = "CycleDutyBox";
+    if(window.sim_area != REAL_TIME_CONTROL)
+        sbg2.style.display = "none"; //we start in simulated so we dont have to show this box
 
     sbg2.innerHTML = SliderDutyCycleHtml;
 
     const sign = sbf_basicform( "/communicationScript.py", "sign", "Sign V(t):", dictionaryUnitsOfMeasure["none"], "number", 0.01);
     sbg2.appendChild(sign);
     
-
-
     //this is needed. in fact im impressed this works. id think browser timings would mess this up:
     const SliderDutyCycle = document.getElementById("SliderDutyCycle");
     const UI_dutycycle = document.getElementById("UI_dutycycle");
