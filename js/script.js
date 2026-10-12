@@ -675,7 +675,11 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     return bf;
 }
 
-//save step data 
+/*
+TODO
+save all of this in a single function cause currently we are gonna have this in all of them:
+save_sim_area_data();
+*/
 function save_step_data(){
     window.step["amp"] = document.getElementById("UI_amp").value;
     window.step["it"] = document.getElementById("UI_it").value;
@@ -685,12 +689,16 @@ function save_step_data(){
     window.step["dutycycle"] = document.getElementById("UI_dutycycle").value;
     window.step["sign"] = document.getElementById("UI_sign").value;
 
+    save_sim_area_data();
+
 }
 function save_sine_con_data(){
     window.sine_con["amp"] = document.getElementById("UI_amp").value;
     window.sine_con["freq"] = document.getElementById("UI_freq").value;
     window.sine_con["phase_angle"] = document.getElementById("UI_phase_angle").value;
     window.sine_con["offset"] = document.getElementById("UI_offset").value;
+
+    save_sim_area_data();
 
 }
 function save_sine_dis_data(){
@@ -700,7 +708,13 @@ function save_sine_dis_data(){
     window.sine_con["offset"] = document.getElementById("UI_offset").value;
     window.sine_dis["period"] = document.getElementById("UI_period").value;
 
+    save_sim_area_data();
+
 }
+
+
+
+
 function save_sim_data(){
 
     window.simulate_motor.armature_resistance = document.getElementById("UI_armature_resistance").value;
@@ -939,31 +953,6 @@ function create_area_for_motor_parameters(father){
 }
 
 
-function create_system_and_vcc_area(father){
-    const sidebarGroup = document.createElement("div");
-    sidebarGroup.className = "sidebar_group sbgh2";
-
-    const systemStatus = document.createElement("div");
-    systemStatus.className = "sidebar_basic_elements system_status";
-    systemStatus.id = "system_id";
-
-
-    systemStatus.style.marginTop = "5px";
-    systemStatus.style.marginBottom = "5px";
-
-    systemStatus.style.paddingTop = "0px";
-    systemStatus.style.paddingBottom = "0px";
-
-
-    const statusText = document.createElement("p");
-    statusText.textContent = "O | System Off";
-
-    systemStatus.appendChild(statusText);
-    sidebarGroup.appendChild(systemStatus);
-    father.appendChild(sidebarGroup);
-}
-
-
 //while it is a global varibale the selected button, it is also when this is called that this variable represents the "previous state of the button."
 function sim_real_identification(father, selected_button){
     const buttonContainer = document.createElement("div");
@@ -1089,6 +1078,17 @@ function get_last_predicted_values(father){
     }
 }
 
+function save_sim_area_data(){
+    if(window.sim_area == REAL_TIME_CONTROL){
+        window.real_vcc = document.getElementById("UI_vcc").value;
+    }
+    if(window.sim_area == SIMULATED_CONTROL){
+        window.simulate_time = document.getElementById("UI_time").value;
+        
+    }
+
+}
+
 //do we call upon this function when the user clicks the button again as in step and so on.
 function simulate_area(father, button_clicked=SAME_AS_LAST){
 
@@ -1143,6 +1143,7 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
         }
 
         sbg_sri = document.getElementById("sri_section_container");
+        save_sim_area_data();
         sbg_sri.replaceChildren();
 
 
@@ -1190,7 +1191,7 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
         create_area_for_motor_parameters(sbg_sri);
         
         //add a time input and a play simulation
-        const bf = sbf_basicform( "/communicationScript.py", "time", "Time:", "T", "number", 0.01, window.real_vcc , 7);
+        const bf = sbf_basicform( "/communicationScript.py", "time", "Time:", "T", "number", 0.01, window.simulate_time , 7);
         sbg_sri.appendChild(bf);
 
         
@@ -1211,8 +1212,7 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
         systemStatus.appendChild(statusText);
         sbg_sri.appendChild(systemStatus);
         
-        //does it add this empty?
-        const bf = sbf_basicform( "/communicationScript.py", "vcc", "vcc:", " ", "number", 0.01, window.simulate_time, 10);
+        const bf = sbf_basicform( "/communicationScript.py", "vcc", "Vcc:", " ", "number", 0.01, window.real_vcc, 10);
         sbg_sri.appendChild(bf);
         
         
