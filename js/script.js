@@ -547,6 +547,23 @@ dictionaryUnitsOfMeasure["viscous_friction_coefficient"] = `
 `;
 
 
+/* icons svg*/
+let icons = {};
+icons["play"] = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" style="width:20px;"><!--!Font Awesome Free v7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M187.2 100.9C174.8 94.1 159.8 94.4 147.6 101.6C135.4 108.8 128 121.9 128 136L128 504C128 518.1 135.5 531.2 147.6 538.4C159.7 545.6 174.8 545.9 187.2 539.1L523.2 355.1C536 348.1 544 334.6 544 320C544 305.4 536 291.9 523.2 284.9L187.2 100.9z"/></svg>
+`;
+icons["stop"] = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" style="width:19px; padding-bottom:0.5px;"><!--!Font Awesome Free v7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M160 96L480 96C515.3 96 544 124.7 544 160L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 160C96 124.7 124.7 96 160 96z"/></svg>
+`;
+icons["save"] = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" style="width:20px;"><!--!Font Awesome Free v7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 237.3C544 220.3 537.3 204 525.3 192L448 114.7C436 102.7 419.7 96 402.7 96L160 96zM192 192C192 174.3 206.3 160 224 160L384 160C401.7 160 416 174.3 416 192L416 256C416 273.7 401.7 288 384 288L224 288C206.3 288 192 273.7 192 256L192 192zM320 352C355.3 352 384 380.7 384 416C384 451.3 355.3 480 320 480C284.7 480 256 451.3 256 416C256 380.7 284.7 352 320 352z"/></svg>
+`;
+icons["load"] = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" style="width:20px;"><!--!Font Awesome Free v7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M192 64C156.7 64 128 92.7 128 128L128 368L310.1 368L279.1 337C269.7 327.6 269.7 312.4 279.1 303.1C288.5 293.8 303.7 293.7 313 303.1L385 375.1C394.4 384.5 394.4 399.7 385 409L313 481C303.6 490.4 288.4 490.4 279.1 481C269.8 471.6 269.7 456.4 279.1 447.1L310.1 416.1L128 416.1L128 512.1C128 547.4 156.7 576.1 192 576.1L448 576.1C483.3 576.1 512 547.4 512 512.1L512 234.6C512 217.6 505.3 201.3 493.3 189.3L386.7 82.7C374.7 70.7 358.5 64 341.5 64L192 64zM453.5 240L360 240C346.7 240 336 229.3 336 216L336 122.5L453.5 240z"/></svg>
+`;
+
+
+
 
 
 
@@ -589,6 +606,12 @@ function sbf_basicform(action, for_d, label_text, Unitofmeasure, type, step, val
     input.id = "UI_" + for_d; //UI_amp
     input.style.width = size + "em"; // 7 i think its always gonna be 7
     input.value = value;
+
+    input.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+        }
+    });
 
     // Put everything together
     div.innerHTML = Unitofmeasure;
@@ -1124,7 +1147,6 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
 
     if((window.sb_state == INITIATE) || (button_clicked == SAME_AS_LAST)){
         //we are in initiate:
-        console.warn("we create the sidebar from zero.")
         sbg_sri = creating_sidebar_group(father);
         sbg_sri.id = "sri_section_container";
         sbg_sri.style.marginTop = "10px";
@@ -1161,9 +1183,6 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
         
         if(window.sb_state == STEP && button_clicked != REAL_TIME_CONTROL && window.sim_area == REAL_TIME_CONTROL)
             invertVisibility(document.getElementById("CycleDutyBox"));
-
-
-        console.warn("removed all sri kids, but sri group should still exists.");
         
     }
 
@@ -1216,9 +1235,6 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
         sbg_sri.appendChild(bf);
         
         
-        console.warn("everything got appended?");
-        
-        
         
     }
     // else if(button_clicked == SYSTEM_IDENTIFICATION){
@@ -1236,12 +1252,16 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
     
     //creating buttons that we need for each window in particular
     
-    startButton_sim = { id: "b_start_sim", icon: "&#xf04b;" };
-    startButton_real = { id: "b_start_real", icon: "&#xf04b;" };
-    startButton_identify = { id: "b_start_identify", icon: "&#xf04b;" };
-    stopButton = { id: "b_stop", iconClass: "fa fa-stop" };
-    loadButton = { id: "b_load", text: "Load" };
-    saveButton = { id: "b_save", text: "Save" };
+    startButton_sim = { id: "b_start_sim", icon: icons["play"]};
+    startButton_real = { id: "b_start_real", icon: icons["play"]};
+    startButton_identify = { id: "b_start_identify", icon: icons["play"]};
+    stopButton = { id: "b_stop", icon: icons["stop"]};
+    
+    
+    // loadButton = { id: "b_load", text: "Load" };
+    loadButton = { id: "b_load", icon: icons["load"]};
+    // saveButton = { id: "b_save", text: "Save" };
+    saveButton = { id: "b_save", icon: icons["save"]};
     
     
     let sri_buttons = [];
@@ -1267,14 +1287,7 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
         button.id = id;
         
         if (icon) {
-            const i = document.createElement("i");
-            i.className = "fa";
-            i.innerHTML = icon;
-            button.appendChild(i);
-        } else if (iconClass) {
-            const i = document.createElement("i");
-            i.className = iconClass;
-            button.appendChild(i);
+            button.insertAdjacentHTML("beforeend", icon);
         } else {
             button.textContent = text;
         }
