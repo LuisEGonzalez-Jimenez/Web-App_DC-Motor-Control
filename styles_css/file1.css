@@ -368,7 +368,7 @@
     background-color: var(--megrey);
     height: calc(100vh - var(--nbh));
     /*400 is the size of the sidebar, 25 pixels is the size of the scroll helping bar to the right that missaligns the graphed area in edge */
-    width: calc(100vw - 400px - 25px); 
+    width: calc(100vw - 400px); 
     position: fixed;
     top: var(--nbh);
     right: 0px;
@@ -380,7 +380,7 @@
 .container_graph_1{
     height: 45%;
     width: 95%;
-    margin: 15px;
+    margin: 15px 15px 15px 25px;
     background-color: white;
     border-radius: 20px;
     border-color: var(--megrey);
