@@ -16,6 +16,10 @@ const SIMULATED_CONTROL = 0;
 const REAL_TIME_CONTROL = 1;
 const SYSTEM_IDENTIFICATION = 2;
 
+//changes_caused_by_sri_buttons
+const CCBSB_EXEC_SRI = 0;
+const CCBSB_EXEC_CHANGE_TO_SECTION = 1;
+
 
 window.sb_state = INITIATE; 
 window.sb_condis = CONTINUOUS;
@@ -987,7 +991,7 @@ function create_area_for_motor_parameters(father){
 
 
 //while it is a global varibale the selected button, it is also when this is called that this variable represents the "previous state of the button."
-function sim_real_identification(father, selected_button){
+function sim_real_identification(father, selected_button, state_clicked){
     const buttonContainer = document.createElement("div");
     buttonContainer.classList.add("sri_area");
     father.appendChild(buttonContainer);
@@ -1027,13 +1031,13 @@ function sim_real_identification(father, selected_button){
     
     //assing funtions to each of these.
     button_sim_1.addEventListener("click", () => {
-        simulate_area(father, SIMULATED_CONTROL);
+        simulate_area(father, SIMULATED_CONTROL, state_clicked);
     });
     button_sim_2.addEventListener("click", () => {
-        simulate_area(father, REAL_TIME_CONTROL);
+        simulate_area(father, REAL_TIME_CONTROL, state_clicked);
     });
     button_sim_3.addEventListener("click", () => {
-        simulate_area(father, SYSTEM_IDENTIFICATION);
+        simulate_area(father, SYSTEM_IDENTIFICATION, state_clicked);
     });
 
 
@@ -1111,6 +1115,78 @@ function get_last_predicted_values(father){
     }
 }
 
+
+
+
+
+
+
+
+function changes_caused_by_sri_buttons(where_is_this_code_called, from_state, to_state, from_sri, to_sri){
+    //example call : changes_caused_by_sri_buttons(CCBSB_EXEC_CHANGE_TO_SECTION, window.sb_state, STEP, window.sim_area);
+    //this function agregates all the visibility chagnes done to the sidebar.
+    //we are working in lines 
+    // 1126
+    // 1200
+    // 1600
+
+    //also these are the variables being used for where is this code called:
+    // const CCBSB_EXEC_SRI = 0;
+    // const CCBSB_EXEC_CHANGE_TO_SECTION = 1;
+
+    //adittionally from state and to state basically beahve the same when inside of sri call, because they are in the same state just changing the sri
+
+    if(where_is_this_code_called == CCBSB_EXEC_SRI){
+        
+        //this is step visibility functions.
+            //if we are in step and changing to real motor.
+        if(to_state == STEP){
+            if(to_sri == REAL_TIME_CONTROL)
+                invertVisibility(document.getElementById("CycleDutyBox"));
+            
+                //if we are in Step and we are getting out of real time control and we are currently in realtime control
+            if(to_sri != REAL_TIME_CONTROL && from_sri == REAL_TIME_CONTROL)
+                invertVisibility(document.getElementById("CycleDutyBox"));
+    
+            //System identification changes when clicking the button
+            if(to_sri == SYSTEM_IDENTIFICATION)
+                invertVisibility(document.getElementById("step_box_1"));
+            
+            //if we are in Step and we are getting out of real time control and we are currently in realtime control
+            if(to_sri != SYSTEM_IDENTIFICATION && from_sri == SYSTEM_IDENTIFICATION)
+                invertVisibility(document.getElementById("step_box_1"));
+        }
+        if(to_state == SINE){
+            if(to_sri == SYSTEM_IDENTIFICATION){
+                invertVisibility(document.getElementById("condis_group_id"));
+                invertVisibility(document.getElementById("sine_main_formula_container_id"));
+            }
+                
+            //if we are in Step and we are getting out of real time control and we are currently in realtime control
+            if(to_sri != SYSTEM_IDENTIFICATION && from_sri == SYSTEM_IDENTIFICATION){
+                invertVisibility(document.getElementById("condis_group_id"));
+                invertVisibility(document.getElementById("sine_main_formula_container_id"));
+            }
+        }
+
+
+    }
+    else if(where_is_this_code_called == CCBSB_EXEC_CHANGE_TO_SECTION){
+        if(from_state == INITIATE){
+            return 0;
+        }
+
+        if(from_state != STEP && to_state == STEP){
+            if(to_sri == SYSTEM_IDENTIFICATION){
+                invertVisibility(document.getElementById("condis_group_id"));
+                invertVisibility(document.getElementById("sine_main_formula_container_id"));
+            }
+
+        }
+    }
+}
+
+
 function save_sim_area_data(){
     if(window.sim_area == REAL_TIME_CONTROL){
         window.real_vcc = document.getElementById("UI_vcc").value;
@@ -1123,37 +1199,9 @@ function save_sim_area_data(){
 }
 
 //do we call upon this function when the user clicks the button again as in step and so on.
-function simulate_area(father, button_clicked=SAME_AS_LAST){
-
+function simulate_area(father, button_clicked=SAME_AS_LAST, state_clicked){
 
     let sbg_sri;
-
-    /*
-    case 1
-        initialize 
-        SIMULATEd control
-
-    case 2
-        step "because it hasnt updated"
-        same as last
-    
-        window sim area == simulated control
-    
-    */
-
-
-    //so when we change func as in from step to sine, i would expect it to execute all the same.
-
-    //if we arent in initiate OR we are moving from step to sine. because the we want the button to stay the same as the last
-    //ive spent too much time here lets just do it fast.
-
-    //what information do i need.
-
-    //i need to know if we are initializing.
-    //i need to know weather we are changing from sine to step.
-
-    //if we are changing then i want button clicked to be the same as the last, AND to create it from 0.
-    let cycleDutyExists = false;
 
     if((window.sb_state == INITIATE) || (button_clicked == SAME_AS_LAST)){
         //we are in initiate:
@@ -1169,7 +1217,7 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
     }else{
         //we are in a staet which the group still exists.
 
-        //you clicked the same button u buffun, it only means you get a zero back, u peasent. (might need to remove this coment later on. (imma forget this fs))
+        //you clicked the same button u buffun
         if(button_clicked == window.sim_area){
             return 0;
         }
@@ -1179,21 +1227,14 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
         sbg_sri.replaceChildren();
 
 
+        //change visibility of constents below:
+        changes_caused_by_sri_buttons(CCBSB_EXEC_SRI, window.sb_state, state_clicked, window.sim_area, button_clicked);
 
 
-        //SECTION IN WHICH WE DECIDE TO HIDE STUFF WHEN IN DIFFERENT AREAS OF THE CONTROL
-        /*
-            - basically when we enter different areas, for example in step we hide stuff at differnet areas of the sim
-            - we only want to see duty cycle when in real time control.
-            -  in identification we probably dont want to see anything.
-        */
-        //if we are in step and changing to real motor.
-        if(window.sb_state == STEP && button_clicked == REAL_TIME_CONTROL)
-            invertVisibility(document.getElementById("CycleDutyBox"));
-        
-        if(window.sb_state == STEP && button_clicked != REAL_TIME_CONTROL && window.sim_area == REAL_TIME_CONTROL)
-            invertVisibility(document.getElementById("CycleDutyBox"));
-        
+
+
+
+
     }
 
     
@@ -1206,7 +1247,7 @@ function simulate_area(father, button_clicked=SAME_AS_LAST){
     
 
     //create area to select mode
-    sim_real_identification(sbg_sri, button_clicked);
+    sim_real_identification(sbg_sri, button_clicked, state_clicked);
 
 
 
@@ -1374,10 +1415,11 @@ function change_to_sine(condis) {
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
 
-    simulate_area(sbc, SAME_AS_LAST);
+    simulate_area(sbc, SAME_AS_LAST, SINE);
 
     //create sidebar group with heights:
     const sbg = creating_sidebar_group(sbc);
+    sbg.id = "condis_group_id";
 
     //create continuous or discrete
     if (condis == CONTINUOUS) {
@@ -1414,13 +1456,8 @@ function change_to_sine(condis) {
 
 
     const sbg2 = document.createElement('div');
+    sbg2.id = "sine_main_formula_container_id";
     sbg2.classList.add('sidebar_group');
-    if (condis == CONTINUOUS) {
-        sbg2.classList.add('sbgh5');
-    }
-    else {
-        sbg2.classList.add('sbgh6');
-    }
 
     sbc.appendChild(sbg2);
 
@@ -1439,71 +1476,28 @@ function change_to_sine(condis) {
 
     //function sbf_basicform(action, for_d, label_text, Unitofmeasure, type, step) {
     //              missing adding id i believe? might not be needed
-    const bf = sbf_basicform(
-        "/communicationScript.py",
-        "amp",
-        "Amplitude:",
-        dictionaryUnitsOfMeasure["amp"],
-        "number",
-        0.01,
-        window.sine_con["amp"],
-        7
-    );
+    const bf = sbf_basicform( "/communicationScript.py", "amp", "Amplitude:", dictionaryUnitsOfMeasure["amp"], "number", 0.01, window.sine_con["amp"], 7);
     sbg2.appendChild(bf);
 
-    const freq = sbf_basicform(
-        "/communicationScript.py",
-        "freq",
-        "Frequency:",
-        dictionaryUnitsOfMeasure["omega"],
-        "number",
-        0.01,
-        window.sine_con["freq"]
-    );
+    const freq = sbf_basicform( "/communicationScript.py", "freq", "Frequency:", dictionaryUnitsOfMeasure["omega"], "number", 0.01, window.sine_con["freq"]);
     sbg2.appendChild(freq);
 
-    const phase_angle = sbf_basicform(
-        "/communicationScript.py",
-        "phase_angle",
-        "Phase Angle:",
-        dictionaryUnitsOfMeasure["phi"],
-        "number",
-        0.01,
-        window.sine_con["phase_angle"]
-    );
+    const phase_angle = sbf_basicform( "/communicationScript.py", "phase_angle", "Phase Angle:", dictionaryUnitsOfMeasure["phi"], "number", 0.01, window.sine_con["phase_angle"]);
     sbg2.appendChild(phase_angle);
 
-    const offset = sbf_basicform(
-        "/communicationScript.py",
-        "offset",
-        "Offset:",
-        dictionaryUnitsOfMeasure["delta"],
-        "number",
-        0.01,
-        window.sine_con["offset"]
-    );
+    const offset = sbf_basicform( "/communicationScript.py", "offset", "Offset:", dictionaryUnitsOfMeasure["delta"], "number", 0.01, window.sine_con["offset"]);
     sbg2.appendChild(offset);
 
 
     if (condis == DISCRETE) {
-        const offset = sbf_basicform(
-            "/communicationScript.py",
-            "period",
-            "Period:",
-            dictionaryUnitsOfMeasure["period"],
-            "number",
-            0.01,
-            window.sine_dis["period"]
-        );
+        const offset = sbf_basicform( "/communicationScript.py", "period", "Period:", dictionaryUnitsOfMeasure["period"], "number", 0.01, window.sine_dis["period"] );
         sbg2.appendChild(offset);
     }
 
+    changes_caused_by_sri_buttons(CCBSB_EXEC_CHANGE_TO_SECTION, window.sb_state, SINE, window.sim_area, window.sim_area);
 
-
-    //highlight the bar and unhighlight previous button
-    if (window.sb_state != SINE) {
-        window.sb_state = change_button_highlights(SINE);
-    }
+    //changed code here hope this doesnt break the button changing colors for some execption i didnt see
+    window.sb_state = change_button_highlights(SINE);
 
     return 0;
 }
@@ -1538,7 +1532,7 @@ function change_to_step() {
     const sbc = creating_sidebar_contents(place);
     
     //create the simulate area (its gonna have to be renamed as it doesnt stand for that now)
-    simulate_area(sbc, SAME_AS_LAST);
+    simulate_area(sbc, SAME_AS_LAST, STEP);
 
 
 
@@ -1546,6 +1540,7 @@ function change_to_step() {
     //actual content of the step side of the sidebar
     //create sidebar group
     const sbg = creating_sidebar_group(sbc);
+    sbg.id = "step_box_1"
 
 
     const sbf = document.createElement('div');
@@ -1602,12 +1597,12 @@ function change_to_step() {
     });
 
 
+    //changes to visual aspects  = [we are doing this because of editability though it might be a bit redundant]
+    //     const CCBSB_EXEC_SRI = 0;
+    //     const CCBSB_EXEC_CHANGE_TO_SECTION = 1;
+    changes_caused_by_sri_buttons(CCBSB_EXEC_CHANGE_TO_SECTION, window.sb_state, STEP, window.sim_area, window.sim_area);
+    //this function, is gonna be called out twice sometimes. which is a problem.
 
-
-
-
-
-    //we change to step change the button highlights
     window.sb_state = change_button_highlights(STEP);
 
 
@@ -1655,7 +1650,7 @@ function change_to_PID(condis) {
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
 
-    simulate_area(sbc, SAME_AS_LAST);
+    simulate_area(sbc, SAME_AS_LAST, PID);
 
     //create sidebar group with heights:
     const sbg = creating_sidebar_group(sbc);

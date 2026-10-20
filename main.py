@@ -394,7 +394,8 @@ async def on_play_simulation_button_py(event=None):
         #def make_sine_discrete(n, A: float, omega: float, phi: float = 0.0, delta: float = 0.0):
         u = make_sine_discrete(time_array, amp, freq, phase_angle, offset)
 
-
+    if selected == PID:
+        print("we in PID")
 
 
     if selected == PID:
