@@ -1,8 +1,26 @@
 
 :root {
+
+
     --meblue:rgba(67, 30, 245);
     --megrey:rgba(243, 245, 246);
     --medarkergrey:rgb(238, 240, 237);
+    --mewhite_background:rgb(255, 255, 255);
+    --mewhite_darker:rgb(245, 245, 245); 
+    
+    
+    
+    
+    /* --meblue:rgba(67, 30, 245);
+    --megrey: rgba(12, 10, 9);
+    --medarkergrey: rgb(17, 15, 18);
+    --mewhite_background: rgb(0, 0, 0);
+    --mewhite_darker: rgb(10, 10, 10);
+
+    --textColor:rgb(150, 150, 150); */
+    
+    
+    
 
     --sbh:50px;
     --sdborderWidth:9.8px;
@@ -30,6 +48,7 @@
 *{
     padding: 0;
     margin: 0;
+    color: var(--textColor);
     
 }
 
@@ -43,7 +62,7 @@
     z-index: 20;
     height: 100%;
     width: 100%;
-    background-color: white;
+    background-color: var(--mewhite_background);
     
     display: flex;
     justify-content: center;
@@ -142,7 +161,7 @@
 }
 
 .sidebar-1 {
-    background-color: white;
+    background-color: var(--mewhite_background);
     width: 340px; /*this could vary on phones*/
     height: calc(100vh - var(--nbh));
     position: absolute;
@@ -180,7 +199,8 @@
     width: 280px;
     height: auto;
     position: static;
-    background-color: whitesmoke;
+    background-color: var(--mewhite_darker);
+    color: var(--textColor);
 
     display: flex;
     justify-content: space-between;
@@ -197,7 +217,7 @@
     width: 280px;
     height: 48px; /*47.2 is the accurate answer here*/
     position: static;
-    background-color: whitesmoke;
+    background-color: var(--mewhite_darker);
 
     margin: auto;
     display: flex;
@@ -239,7 +259,7 @@
 
 .descriptor{
     font-size: 20px;
-    color: black;
+    color: var(--textColor);
     margin-right: 30px;
 }
 
@@ -288,12 +308,12 @@
     
 }
 .sb_button:hover{
-    background-color: white;
+    background-color: var(--mewhite_background);
     border-radius: 10px 10px 0px 0px;
 }
 
 .sb_button_selected{
-    background-color: white;
+    background-color: var(--mewhite_background);
     rotate: 90deg;
     height: 60px;
     width: 120px;
@@ -381,7 +401,7 @@
     height: 45%;
     width: 95%;
     margin: 15px 15px 15px 25px;
-    background-color: white;
+    background-color: var(--mewhite_background);
     border-radius: 20px;
     border-color: var(--megrey);
     border-style: solid;

@@ -11,9 +11,11 @@ import js
 import asyncio
 import plotly.graph_objects as go
 
-STEP = 0
-SINE = 1
-PID = 2
+from simple_pid import PID
+
+STATE_STEP = 0
+STATE_SINE = 1
+STATE_PID = 2
 SIM = 3
 
 CONTINUOUS = 0
@@ -159,8 +161,62 @@ def run_simulation(u, x0, how_long, n_samples=1000):
     #before:  return time_array2, output, u
     return t_out, current, omega, u
 
+# set point is the desired speed in radians
+def run_pid_simulation(setpoint, x0, how_long, n_samples=1000, Kp=1.0, Ki=0.1, Kd=0.01, dt=None, condis=CONTINUOUS):
+    A, B, C, D = build_motor()
+    motor = ct.ss(A, B, C, D)
+    
+    if dt is None:
+        dt = how_long / n_samples
+    
+    if(condis == DISCRETE):
+        #this migth expect a matrix of 1000 and in discrete the nimber of samples is dif
+        n_samples =  int(how_long / dt)
+        print("how_long")
+        print(how_long)
+        print("dt")
+        print(dt)
+        print("n_samples")
+        print(n_samples)
+
+    # Initialize PID
+    pid = PID(Kp, Ki, Kd, setpoint=setpoint, sample_time=dt)
+    pid.output_limits = (-50, 50)  # adjust to your motor voltage limits
+    
+    # State and storage
+    x = x0.copy()
+    
+    y = C @ x
+    current = float(y[0])
+    omega = float(y[1])
+
+    current_values = []
+    omega_values = []
+    u_values = []
+    error_values = []
+    t_values = [0.0] #this is probably initial value that we need
+    
+    for _ in range(n_samples):
+        y = C @ x
+        current = float(y[0])
+        omega = float(y[1])
+        
+        current_values.append(current)
+        omega_values.append(omega)
+        error = setpoint - omega
+        error_values.append(error)
+        
+        u_k = pid(omega, dt=dt) #this supposibly makes it take longer but it should be accurate every time
+        # u_k = pid(omega) #this had so many different outputs depending on the time almost random.
+        u_values.append(u_k)
+        
+        x = x + dt * (A @ x + B.flatten() * u_k)
+        t_values.append(len(t_values) * dt)
+        
+    return np.array(t_values), np.array(current_values), np.array(omega_values), np.array(u_values), np.array(error_values)
+
 # plot_graphs(time, output, "DC Motor Speed Response" ,"Angular velocity [rad/s]", plot_area_1)
-def plot_graphs(time, output, output_label, title, graph_id):
+def plot_graphs_white(time, output, output_label, title, graph_id):
     #plot motor speed
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=time, y=output, mode="lines", name="ω(t)"))
@@ -177,6 +233,42 @@ def plot_graphs(time, output, output_label, title, graph_id):
     iframe.style.border = "none"
 
     iframe.srcdoc = fig.to_html(include_plotlyjs="cdn", full_html=True)
+    container.innerHTML = ""
+    container.appendChild(iframe)
+
+def plot_graphs(time, output, output_label, title, graph_id):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=time,
+        y=output,
+        mode="lines",
+        name="ω(t)",
+        line=dict(color="#60A5FA", width=2)
+    ))
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Time [s]",
+        yaxis_title=output_label,
+        template="plotly_dark",
+        paper_bgcolor="#0A0A0A",
+        plot_bgcolor="#0A0A0A",
+        font=dict(color="#F5F5F5"),
+    )
+
+    container = document.getElementById(graph_id)
+    iframe = document.createElement("iframe")
+    iframe.style.width = "100%"
+    iframe.style.height = "95%"
+    iframe.style.border = "none"
+    iframe.style.backgroundColor = "#0A0A0A"
+
+    iframe.srcdoc = fig.to_html(
+        include_plotlyjs="cdn",
+        full_html=True,
+        config={"responsive": True}
+    )
+
     container.innerHTML = ""
     container.appendChild(iframe)
 
@@ -222,15 +314,19 @@ def make_sine_discrete(n, A: float, omega: float, phi: float = 0.0, delta: float
     n = np.asarray(n, dtype=float)   # cast to float so sin() works
     return A * np.sin(omega * n + phi) + delta
 
+def plot_everything(time, omega, voltage, current, error):
+
+    plot_graphs(time, omega, "Angular velocity [rad/s]", "DC Motor Speed Response" , "plot_area_1")
+
+    plot_graphs(time, voltage, output_label="Voltage [V]", title="Armature Voltage", graph_id="plot_area_2",)
+    
+    plot_graphs(time, current, "Current", "Current response over time", "plot_area_3")
+
+    plot_graphs(time, error, "Error", "Error over time", "plot_area_4")
 
 #i need a function that isnt assigned or async just in case
 def calculate(value, u, t, samples: int = 1000):
-    if value == "simulate":
-        print("simulating")
-        u = np.full(samples, 12)
-        voltage_backup = u
-    # elif value == "Step":
-        
+
 
     
     # Initial conditions:
@@ -242,18 +338,8 @@ def calculate(value, u, t, samples: int = 1000):
     # def run_simulation(u, vcc: float, x0, time series, n_samples: int = 1000):
     time, current, omega, voltage = run_simulation(u, x0, t, samples)
 
-    
+    plot_everything(time, omega, voltage, current)
 
-    #plot
-    plot_graphs(time, omega, "Angular velocity [rad/s]", "DC Motor Speed Response" , "plot_area_1")
-    if value == "simulate":
-        plot_graphs(time, voltage_backup, output_label="Voltage [V]", title="Armature Voltage", graph_id="plot_area_2",)
-    else:
-
-        plot_graphs(time, voltage, output_label="Voltage [V]", title="Armature Voltage", graph_id="plot_area_2",)
-    
-    plot_graphs(time, current, "Current", "Current response over time", "plot_area_3")
-    
     
     
     #now actually predicting what the variables of the motor look like
@@ -297,14 +383,14 @@ async def on_play_simulation_button_py(event=None):
     print("time amount:")
     print(time_amount)
 
-    STEP = 0
-    SINE = 1
-    PID = 2
+    STATE_STEP = 0
+    STATE_SINE = 1
+    STATE_PID = 2
     IDEN = 3
     
 
 
-    if selected == STEP:
+    if selected == STATE_STEP:
         #these arent loaded so:
         #Ra = float(js.simulate_motor.armature_resistance) (reference of how to write)
         amp = float(web.page["UI_amp"].value)
@@ -331,7 +417,7 @@ async def on_play_simulation_button_py(event=None):
         #def make_step(t, amplitude: float, t0: float = 0.0, offset: float = 0.0):
         u = make_step(time_array, amp, it, offset)
         
-    if selected == SINE and condis == CONTINUOUS:
+    if selected == STATE_SINE and condis == CONTINUOUS:
 
         amp = float(web.page["UI_amp"].value)
         if not amp:
@@ -361,7 +447,7 @@ async def on_play_simulation_button_py(event=None):
         #def make_sine(t, A: float, omega: float, phi: float = 0.0, delta: float = 0.0):
         u = make_sine(time_array, amp, freq, phase_angle, offset)
     
-    if selected == SINE and condis == DISCRETE:
+    if selected == STATE_SINE and condis == DISCRETE:
 
         amp = float(web.page["UI_amp"].value)
         if not amp:
@@ -394,11 +480,78 @@ async def on_play_simulation_button_py(event=None):
         #def make_sine_discrete(n, A: float, omega: float, phi: float = 0.0, delta: float = 0.0):
         u = make_sine_discrete(time_array, amp, freq, phase_angle, offset)
 
-    if selected == PID:
-        print("we in PID")
+    if selected == STATE_PID and condis == CONTINUOUS:
+
+        simulation_time = float(web.page["UI_time"].value)
+        if not simulation_time:
+            simulation_time = 0
+
+        gains_kp = float(web.page["UI_gainskp"].value)
+        if not gains_kp:
+            gains_kp = 0
+
+        gains_ki = float(web.page["UI_gainski"].value)
+        if not gains_ki:
+            gains_ki = 0
+
+        gains_kd = float(web.page["UI_gainskd"].value)
+        if not gains_kd:
+            gains_kd = 0
+
+        target_speed = float(web.page["UI_ts"].value)
+        if not target_speed:
+            target_speed = 0
+        
+
+        #def run_pid_simulation(setpoint, x0, how_long, n_samples=1000, Kp=1.0, Ki=0.1, Kd=0.01, dt=None):
+        time, current, omega, voltage, error = run_pid_simulation(target_speed, np.array([0.0, 0.0]), simulation_time, n_samples=1000, Kp=gains_kp, Ki=gains_ki, Kd=gains_kd, condis=condis)
+        #UI_gainskp
+
+        #return np.array(t_values), np.array(current_values), np.array(omega_values), np.array(u_values)
+        # time, current, omega, voltage = run_simulation(u, x0, t, samples)
+        plot_everything(time, omega, voltage, current, error)
+
+    if selected == STATE_PID and condis == DISCRETE:
+
+        simulation_time = float(web.page["UI_time"].value)
+        if not simulation_time:
+            simulation_time = 0
+
+        gains_kp = float(web.page["UI_gainskp"].value)
+        if not gains_kp:
+            gains_kp = 0
+
+        gains_ki = float(web.page["UI_gainski"].value)
+        if not gains_ki:
+            gains_ki = 0
+
+        gains_kd = float(web.page["UI_gainskd"].value)
+        if not gains_kd:
+            gains_kd = 0
+
+        target_speed = float(web.page["UI_ts"].value)
+        if not target_speed:
+            target_speed = 10
+        
+        sample_time = float(web.page["UI_sample_time"].value)
+        print("sample_time")
+        print(sample_time)
+        if not sample_time:
+            sample_time = 10
 
 
-    if selected == PID:
+        #def run_pid_simulation(setpoint, x0, how_long, n_samples=1000, Kp=1.0, Ki=0.1, Kd=0.01, dt=None):
+        time, current, omega, voltage, error = run_pid_simulation(target_speed, np.array([0.0, 0.0]), simulation_time, n_samples=1000, Kp=gains_kp, Ki=gains_ki, Kd=gains_kd,dt=sample_time , condis=condis)
+        #UI_gainskp
+
+        #return np.array(t_values), np.array(current_values), np.array(omega_values), np.array(u_values)
+        # time, current, omega, voltage = run_simulation(u, x0, t, samples)
+        plot_everything(time, omega, voltage, current, error)
+
+
+
+
+    if selected == STATE_PID:
         return 0
     
 
@@ -424,7 +577,6 @@ window.on_play_simulation_button_js = on_play_simulation_button_py
 
 
 # Schedule the async function to run
-# this might be useless as we dont really use the main 
 asyncio.ensure_future(main())
 
     

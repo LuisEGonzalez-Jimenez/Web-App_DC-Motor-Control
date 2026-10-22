@@ -48,6 +48,15 @@ window.sine_dis = {
     period: 0
 };
 
+window.pid_con = {
+    ts: 0,
+    kp: 0,
+    ki: 0,
+    kd: 0
+};
+window.pid_dis = {
+    sample_time: 0
+};
 
 // Create a promise and expose it on the window object
 window.jsReadyPromise = new Promise((resolve) => {
@@ -670,31 +679,34 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     input.name = for_d + "kp"; //Amp 
     input.id = "UI_" + for_d + "kp"; //UI_amp
     input.style.width = 8 + "em"; 
+    input.value = window.pid_con["kp"];
     div.appendChild(input);
-
-
-
+    
+    
+    
     div.insertAdjacentHTML("beforeend", dictionaryUnitsOfMeasure["gains_ki"]);
-
+    
     const input2 = document.createElement("input");
     input2.type = type; //number
     input2.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input2.name = for_d + "ki"; //Amp 
-    input2.id = "UI_" + for_d + "k1"; //UI_amp
+    input2.id = "UI_" + for_d + "ki"; //UI_amp
     input2.style.width = 8 + "em"; 
+    input2.value = window.pid_con["ki"];
     div.appendChild(input2);
-
-
-
+    
+    
+    
 
     div.insertAdjacentHTML("beforeend", dictionaryUnitsOfMeasure["gains_kd"]);
-
+    
     const input3 = document.createElement("input");
     input3.type = type; //number
     input3.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input3.name = for_d + "kd"; //Amp 
     input3.id = "UI_" + for_d + "kd"; //UI_amp
     input3.style.width = 8 + "em"; 
+    input3.value = window.pid_con["kd"];
     div.appendChild(input3);
 
 
@@ -730,25 +742,48 @@ function save_step_data(){
 
 }
 function save_sine_con_data(){
+    console.warn("save con data");
     window.sine_con["amp"] = document.getElementById("UI_amp").value;
     window.sine_con["freq"] = document.getElementById("UI_freq").value;
     window.sine_con["phase_angle"] = document.getElementById("UI_phase_angle").value;
     window.sine_con["offset"] = document.getElementById("UI_offset").value;
-
+    
     save_sim_area_data();
-
+    
 }
 function save_sine_dis_data(){
+    console.warn("save dis data");
     window.sine_con["amp"] = document.getElementById("UI_amp").value;
     window.sine_con["freq"] = document.getElementById("UI_freq").value;
     window.sine_con["phase_angle"] = document.getElementById("UI_phase_angle").value;
     window.sine_con["offset"] = document.getElementById("UI_offset").value;
     window.sine_dis["period"] = document.getElementById("UI_period").value;
-
+    
     save_sim_area_data();
-
+    
 }
 
+
+function save_pid_con_data(){
+    window.pid_con["ts"] = document.getElementById("UI_ts").value;
+    window.pid_con["kp"] = document.getElementById("UI_gainskp").value;
+    window.pid_con["ki"] = document.getElementById("UI_gainski").value;
+    window.pid_con["kd"] = document.getElementById("UI_gainskd").value;
+
+    save_sim_area_data();
+}
+
+function save_pid_dis_data(){
+    console.warn("save dis data");
+    window.pid_con["ts"] = document.getElementById("UI_ts").value;
+    window.pid_con["kp"] = document.getElementById("UI_gainskp").value;
+    window.pid_con["ki"] = document.getElementById("UI_gainski").value;
+    window.pid_con["kd"] = document.getElementById("UI_gainskd").value;
+    window.pid_con["sample_time"] = document.getElementById("UI_sample_time").value;
+
+    save_sim_area_data();
+    
+}
 
 
 
@@ -768,16 +803,22 @@ function save_sim_data(){
 function clean_sidebar(place){
     //the logic behind this is that when we start clearing any page, we want to save data
     if(window.sb_state == STEP){
-        save_step_data()
+        save_step_data();
     } else if(window.sb_state == SINE){
 
         //we are entering anything that is not sine and the sb_state hasnt changed, then lets save this info
         if(window.sb_condis == CONTINUOUS){
-            save_sine_con_data()
+            save_sine_con_data();
         } else{
-            save_sine_dis_data()
+            save_sine_dis_data();
         }
         
+    } else if(window.sb_state == PID){
+        if(window.sb_condis == CONTINUOUS){
+            save_pid_con_data();
+        } else{
+            save_pid_dis_data();
+        }
     }
 
     place.removeChild(document.getElementById("sb_contents"));
@@ -1191,9 +1232,8 @@ function save_sim_area_data(){
     if(window.sim_area == REAL_TIME_CONTROL){
         window.real_vcc = document.getElementById("UI_vcc").value;
     }
-    if(window.sim_area == SIMULATED_CONTROL){
+    else if(window.sim_area == SIMULATED_CONTROL){
         window.simulate_time = document.getElementById("UI_time").value;
-        
     }
 
 }
@@ -1635,17 +1675,14 @@ function change_to_PID(condis) {
             return 0;
         }
     }
+    
+    //delete all from side bar
+    const place = document.getElementById("sb_main");
+    clean_sidebar(place);
 
     //because they differ after this 
     // //this should also work when changing fomr sine to PID
     window.sb_condis = condis;
-
-       //info we need:
-    const place = document.getElementById("sb_main");
-
-
-    //delete all from side bar
-    clean_sidebar(place);
 
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
@@ -1699,6 +1736,8 @@ function change_to_PID(condis) {
         sbf.innerHTML = dictionaryFormulas["pid_dis"];
     }
 
+
+
     //input
     const bf = sbf_basicform(
         "/communicationScript.py",
@@ -1706,7 +1745,8 @@ function change_to_PID(condis) {
         "Target Speed:",
         dictionaryUnitsOfMeasure[condis == CONTINUOUS ? "ts" : "ts_pid"],
         "number",
-        0.01
+        0.01,
+        window.pid_con["ts"] 
     );
     sbg2.appendChild(bf);
 
@@ -1748,7 +1788,8 @@ function change_to_PID(condis) {
             "Sample Time:",
             dictionaryUnitsOfMeasure["sample_time"],
             "number",
-            0.01
+            0.01,
+            window.pid_con["sample_time"]
         );
         sbg2.appendChild(freq);
     }
