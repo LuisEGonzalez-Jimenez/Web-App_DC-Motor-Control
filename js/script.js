@@ -55,7 +55,7 @@ window.pid_con = {
     kd: 0
 };
 window.pid_dis = {
-    sample_time: 0
+    sample_time: 0.001
 };
 
 // Create a promise and expose it on the window object
@@ -588,13 +588,91 @@ icons["circle"] = `
 
 
 
+/*
+---------------------------------------------------------------
+everything above was definitions and static htmls taht we have to add
+
+everything below is the functions that we define.
+---------------------------------------------------------------
+*/
 
 
 
 
 
 
+/*---------------------------------------------------------------
+these 6 functions save the data of the input boxes when one exits them.
+they probably could be refactor into a single function called save all data. 
+but this works
+---------------------------------------------------------------*/
+function save_step_data(){
+    window.step["amp"] = document.getElementById("UI_amp").value;
+    window.step["it"] = document.getElementById("UI_it").value;
+    window.step["offset"] = document.getElementById("UI_offset").value;
 
+    //these have yet to be utilized but im doing it in advance
+    window.step["dutycycle"] = document.getElementById("UI_dutycycle").value;
+    window.step["sign"] = document.getElementById("UI_sign").value;
+
+    save_sim_area_data();
+
+}
+function save_sine_con_data(){
+    console.warn("save con data");
+    window.sine_con["amp"] = document.getElementById("UI_amp").value;
+    window.sine_con["freq"] = document.getElementById("UI_freq").value;
+    window.sine_con["phase_angle"] = document.getElementById("UI_phase_angle").value;
+    window.sine_con["offset"] = document.getElementById("UI_offset").value;
+    
+    save_sim_area_data();
+    
+}
+function save_sine_dis_data(){
+    console.warn("save dis data");
+    window.sine_con["amp"] = document.getElementById("UI_amp").value;
+    window.sine_con["freq"] = document.getElementById("UI_freq").value;
+    window.sine_con["phase_angle"] = document.getElementById("UI_phase_angle").value;
+    window.sine_con["offset"] = document.getElementById("UI_offset").value;
+    window.sine_dis["period"] = document.getElementById("UI_period").value;
+    
+    save_sim_area_data();
+    
+}
+function save_pid_con_data(){
+    window.pid_con["ts"] = document.getElementById("UI_ts").value;
+    window.pid_con["kp"] = document.getElementById("UI_gainskp").value;
+    window.pid_con["ki"] = document.getElementById("UI_gainski").value;
+    window.pid_con["kd"] = document.getElementById("UI_gainskd").value;
+
+    save_sim_area_data();
+}
+function save_pid_dis_data(){
+    console.warn("save dis data");
+    window.pid_con["ts"] = document.getElementById("UI_ts").value;
+    window.pid_con["kp"] = document.getElementById("UI_gainskp").value;
+    window.pid_con["ki"] = document.getElementById("UI_gainski").value;
+    window.pid_con["kd"] = document.getElementById("UI_gainskd").value;
+    window.pid_con["sample_time"] = document.getElementById("UI_sample_time").value;
+
+    save_sim_area_data();
+    
+}
+function save_sim_data(){
+
+    window.simulate_motor.armature_resistance = document.getElementById("UI_armature_resistance").value;
+    window.simulate_motor.armature_inductance = document.getElementById("UI_armature_inductance").value;
+    window.simulate_motor.back_electromotive_force_constant = document.getElementById("UI_back_electromotive_force_constant").value;
+    window.simulate_motor.torque_constant = document.getElementById("UI_torque_constant").value;
+    window.simulate_motor.motor_rotor_inertia = document.getElementById("UI_motor_rotor_inertia").value;
+    window.simulate_motor.viscous_friction_coefficient = document.getElementById("UI_viscous_friction_coefficient").value;
+        
+
+}
+
+/*---------------------------------------------------------------
+these 2 functiosns basically create basic forms of input boxes or sidebar boxes.
+---------------------------------------------------------------*/
 function sbf_basicform(action, for_d, label_text, Unitofmeasure, type, step, value=0, size=7) {
 
     //unit of measure is genuinly different symbols and it changes a lot,
@@ -724,83 +802,11 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     return bf;
 }
 
-/*
-TODO
-save all of this in a single function cause currently we are gonna have this in all of them:
-save_sim_area_data();
-*/
-function save_step_data(){
-    window.step["amp"] = document.getElementById("UI_amp").value;
-    window.step["it"] = document.getElementById("UI_it").value;
-    window.step["offset"] = document.getElementById("UI_offset").value;
-
-    //these have yet to be utilized but im doing it in advance
-    window.step["dutycycle"] = document.getElementById("UI_dutycycle").value;
-    window.step["sign"] = document.getElementById("UI_sign").value;
-
-    save_sim_area_data();
-
-}
-function save_sine_con_data(){
-    console.warn("save con data");
-    window.sine_con["amp"] = document.getElementById("UI_amp").value;
-    window.sine_con["freq"] = document.getElementById("UI_freq").value;
-    window.sine_con["phase_angle"] = document.getElementById("UI_phase_angle").value;
-    window.sine_con["offset"] = document.getElementById("UI_offset").value;
-    
-    save_sim_area_data();
-    
-}
-function save_sine_dis_data(){
-    console.warn("save dis data");
-    window.sine_con["amp"] = document.getElementById("UI_amp").value;
-    window.sine_con["freq"] = document.getElementById("UI_freq").value;
-    window.sine_con["phase_angle"] = document.getElementById("UI_phase_angle").value;
-    window.sine_con["offset"] = document.getElementById("UI_offset").value;
-    window.sine_dis["period"] = document.getElementById("UI_period").value;
-    
-    save_sim_area_data();
-    
-}
-
-
-function save_pid_con_data(){
-    window.pid_con["ts"] = document.getElementById("UI_ts").value;
-    window.pid_con["kp"] = document.getElementById("UI_gainskp").value;
-    window.pid_con["ki"] = document.getElementById("UI_gainski").value;
-    window.pid_con["kd"] = document.getElementById("UI_gainskd").value;
-
-    save_sim_area_data();
-}
-
-function save_pid_dis_data(){
-    console.warn("save dis data");
-    window.pid_con["ts"] = document.getElementById("UI_ts").value;
-    window.pid_con["kp"] = document.getElementById("UI_gainskp").value;
-    window.pid_con["ki"] = document.getElementById("UI_gainski").value;
-    window.pid_con["kd"] = document.getElementById("UI_gainskd").value;
-    window.pid_con["sample_time"] = document.getElementById("UI_sample_time").value;
-
-    save_sim_area_data();
-    
-}
-
-
-
-function save_sim_data(){
-
-    window.simulate_motor.armature_resistance = document.getElementById("UI_armature_resistance").value;
-    window.simulate_motor.armature_inductance = document.getElementById("UI_armature_inductance").value;
-    window.simulate_motor.back_electromotive_force_constant = document.getElementById("UI_back_electromotive_force_constant").value;
-    window.simulate_motor.torque_constant = document.getElementById("UI_torque_constant").value;
-    window.simulate_motor.motor_rotor_inertia = document.getElementById("UI_motor_rotor_inertia").value;
-    window.simulate_motor.viscous_friction_coefficient = document.getElementById("UI_viscous_friction_coefficient").value;
-        
-
-}
-
+/*---------------------------------------------------------------
+functions each of the side bar states need
+---------------------------------------------------------------*/
 //delete all from side bar
-function clean_sidebar(place){
+function clean_sidebar(father){
     //the logic behind this is that when we start clearing any page, we want to save data
     if(window.sb_state == STEP){
         save_step_data();
@@ -821,17 +827,17 @@ function clean_sidebar(place){
         }
     }
 
-    place.removeChild(document.getElementById("sb_contents"));
+    father.removeChild(document.getElementById("sb_contents"));
 }
-//adddding content
 //  main div for side bar contents
-function creating_sidebar_contents(place){
+function creating_sidebar_contents(father){
     let sidebar_contents = document.createElement('div');
     sidebar_contents.classList.add('sidebar_contents_css');
     sidebar_contents.setAttribute('id', 'sb_contents');
-    place.appendChild(sidebar_contents);
+    father.appendChild(sidebar_contents);
     return sidebar_contents;
 }
+// a sub division within the side bar. wasy way to create it and return it
 function creating_sidebar_group(father){
     let creating_sbg = document.createElement('div');
     creating_sbg.classList.add('sidebar_group');
@@ -839,6 +845,13 @@ function creating_sidebar_group(father){
     return creating_sbg;
 }
 
+
+
+/*---------------------------------------------------------------
+changing the colors of the button for the side bar state.
+you tecnically need both previous and the state you are moving to. 
+but the previous state is a global variable thus it is infered from there.
+---------------------------------------------------------------*/
 function change_button_highlights(current_button){
     //sb state is the previously highlighted button
     //current button should be the new one to highlight
@@ -877,11 +890,16 @@ function change_button_highlights(current_button){
     return current_button;
 }
 
+
+/*---------------------------------------------------------------
+motor parameters for simulation functionality.
+
+you see that button that says edit motor parameters. basically these 3 functions are in charge of all of it.
+---------------------------------------------------------------*/
 function mp_close_func(){
     save_sim_data();
     document.body.removeChild(document.getElementById("mp_menu"));
 }
-
 function summon_mp_menu(){
     const background = document.createElement("div");
     background.className = "mp_background";
@@ -1011,7 +1029,6 @@ function summon_mp_menu(){
 
 
 }
-
 function create_area_for_motor_parameters(father){
     const sb_elements = document.createElement('div');
     sb_elements.classList.add('sidebar_basic_elements');
@@ -1031,7 +1048,13 @@ function create_area_for_motor_parameters(father){
 }
 
 
-//while it is a global varibale the selected button, it is also when this is called that this variable represents the "previous state of the button."
+/*---------------------------------------------------------------
+These functions now below each assing some form of value to the area that has the buttons:
+- Simulated Control
+- Real Time Control
+- System Identification
+---------------------------------------------------------------*/
+//this function in particular just creates the 3 buttons and assings them their events.
 function sim_real_identification(father, selected_button, state_clicked){
     const buttonContainer = document.createElement("div");
     buttonContainer.classList.add("sri_area");
@@ -1085,7 +1108,7 @@ function sim_real_identification(father, selected_button, state_clicked){
 
 
 }
-
+//changes the button highlights
 function change_sim_area_buttons_colors(selected_button){
     
     let b_previous_button;
@@ -1117,52 +1140,7 @@ function change_sim_area_buttons_colors(selected_button){
     return selected_button; ///we return the button that is the new correct
 
 }
-
-function get_last_predicted_values(father){
-    //this is supposed to have complex logic on how to get previous gotten data that lives in the python file. 
-    /*
-    this is gonna be a dilemma because currently our libraries are in python.
-
-    everytime we graoh somethign we could prepredict what the values are and then just get them and showem here from the python file.
-
-    or have 2 assigned events. and js events awaits for python promise. i like this much more.
-    */
-
-    
-
-    const sbg = creating_sidebar_group(father);
-    sbg.style.width = '270px';
-    sbg.style.paddingLeft = '20px';
-    
-
-    if (window.identify_results){       
-        for (const [key, value] of Object.entries(JSON.parse(window.identify_results))) {
-            const row = document.createElement('div');
-            row.style.display = 'flex';
-            row.style.justifyContent = 'space-between';
-            row.style.padding = '4px 0';
-            row.classList.add("sri_results")
-
-            const keySpan = document.createElement('span');
-            keySpan.textContent = key;
-
-            const valueSpan = document.createElement('span');
-            valueSpan.textContent = value.toPrecision(3);
-
-            row.appendChild(keySpan);
-            row.appendChild(valueSpan);
-            sbg.appendChild(row);
-        }
-    }
-}
-
-
-
-
-
-
-
-
+//this changes whats shown or hidden with each of the windows
 function changes_caused_by_sri_buttons(where_is_this_code_called, from_state, to_state, from_sri, to_sri){
     //example call : changes_caused_by_sri_buttons(CCBSB_EXEC_CHANGE_TO_SECTION, window.sb_state, STEP, window.sim_area);
     //this function agregates all the visibility chagnes done to the sidebar.
@@ -1226,8 +1204,7 @@ function changes_caused_by_sri_buttons(where_is_this_code_called, from_state, to
         }
     }
 }
-
-
+//saving sim area data
 function save_sim_area_data(){
     if(window.sim_area == REAL_TIME_CONTROL){
         window.real_vcc = document.getElementById("UI_vcc").value;
@@ -1319,7 +1296,12 @@ function simulate_area(father, button_clicked=SAME_AS_LAST, state_clicked){
         
         const statusText = document.createElement("p");
         statusText.textContent = "  System Off";
-        
+
+        const consoleBox = document.createElement("div");
+        consoleBox.innerHTML = `<esp32-console></esp32-console>`;
+
+
+                
         const statusBox = document.createElement("div");
         statusBox.style.display = "flex"
         statusBox.innerHTML = icons["circle"];
@@ -1328,6 +1310,7 @@ function simulate_area(father, button_clicked=SAME_AS_LAST, state_clicked){
         statusBox.appendChild(statusText);
         systemStatus.appendChild(statusBox);
         sbg_sri.appendChild(systemStatus);
+        sbg_sri.appendChild(consoleBox);
         
         const bf = sbf_basicform( "/communicationScript.py", "vcc", "Vcc:", " ", "number", 0.01, window.real_vcc, 10);
         sbg_sri.appendChild(bf);
@@ -1416,6 +1399,48 @@ function simulate_area(father, button_clicked=SAME_AS_LAST, state_clicked){
 
 
 
+
+/*---------------------------------------------------------------
+Exists to show the predictions of the motor parameters based on sine or step data
+(currently this is slightly limited functionality compared to the final functionality.)
+---------------------------------------------------------------*/
+function get_last_predicted_values(father){
+    //this is supposed to have complex logic on how to get previous gotten data that lives in the python file. 
+    /*
+    this is gonna be a dilemma because currently our libraries are in python.
+
+    everytime we graoh somethign we could prepredict what the values are and then just get them and showem here from the python file.
+
+    or have 2 assigned events. and js events awaits for python promise. i like this much more.
+    */
+
+    
+
+    const sbg = creating_sidebar_group(father);
+    sbg.style.width = '270px';
+    sbg.style.paddingLeft = '20px';
+    
+
+    if (window.identify_results){       
+        for (const [key, value] of Object.entries(JSON.parse(window.identify_results))) {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.padding = '4px 0';
+            row.classList.add("sri_results")
+
+            const keySpan = document.createElement('span');
+            keySpan.textContent = key;
+
+            const valueSpan = document.createElement('span');
+            valueSpan.textContent = value.toPrecision(3);
+
+            row.appendChild(keySpan);
+            row.appendChild(valueSpan);
+            sbg.appendChild(row);
+        }
+    }
+}
 
 
 
@@ -1891,14 +1916,6 @@ function change_to_PID(condis) {
 
 change_to_step();
 
-
-//play and stop expand
-// const button = document.getElementById("b_collapsible_arrow");
-// const play_and_stop = document.getElementById("play_and_stop_container");
-
-// button.addEventListener("click", () => {
-//     play_and_stop.classList.toggle("expand");
-// });
 
 
 //show error and current

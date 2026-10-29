@@ -1,16 +1,23 @@
 import numpy as np
 import control as ct
 import matplotlib.pyplot as plt
-#from scipy.optimize import curve_fit #commented this it doesnt seem as if we are using it
 from scipy.signal import savgol_filter
 import json
-
 from pyscript import web, when, window
 from pyscript import document
 import js
 import asyncio
 import plotly.graph_objects as go
 
+"""
+from simple_pid import PID
+
+this function has a bit of issues. it doesnt accept N as a parameter, so we cant add filters.
+in case someone is inherting this code. just to let it be know that we explored the code and there are 2 options. either you copy the code and modify the library as it doesnt
+seem entierly that complex. or you use another library for PID
+
+just remeber taht when you add a library also aadd it to the pyscript.json.
+"""
 from simple_pid import PID
 
 STATE_STEP = 0
@@ -33,9 +40,7 @@ async def main():
     loading_screen.classes.add("display_hidden")
     
 
-#identifying motor parameters immma write this first till i get it, and then imma understand it.
-
-
+#identifying motor parameters.
 def estimate_motor_params(t, v, i, omega, Kt_equals_Kb=True):
     """
     Estimate DC motor parameters from time-series data.
@@ -142,8 +147,7 @@ def build_motor():
     D = np.array([[0], [0]], dtype=float)
     return A, B, C, D
 
-#u used to be the space state for VOLTAGE not current, thus it stayed the same. 
-# but know i believe we might adapt it to be the variabel which changes
+#run simulations for step and sine depending on whether it is continuous or discrete.
 def run_simulation(u, x0, how_long, n_samples=1000):
     A, B, C, D = build_motor()
     motor = ct.ss(A, B, C, D)
@@ -161,6 +165,7 @@ def run_simulation(u, x0, how_long, n_samples=1000):
     #before:  return time_array2, output, u
     return t_out, current, omega, u
 
+#this is only for pid, because pid isnt supposed to have predict motor parameters.
 # set point is the desired speed in radians
 def run_pid_simulation(setpoint, x0, how_long, n_samples=1000, Kp=1.0, Ki=0.1, Kd=0.01, dt=None, condis=CONTINUOUS):
     A, B, C, D = build_motor()
@@ -181,7 +186,8 @@ def run_pid_simulation(setpoint, x0, how_long, n_samples=1000, Kp=1.0, Ki=0.1, K
 
     # Initialize PID
     pid = PID(Kp, Ki, Kd, setpoint=setpoint, sample_time=dt)
-    pid.output_limits = (-50, 50)  # adjust to your motor voltage limits
+    print("we changed this conditions tato delete this later")
+    pid.output_limits = (-3000, 3000)  # adjust to your motor voltage limits
     
     # State and storage
     x = x0.copy()
@@ -215,8 +221,9 @@ def run_pid_simulation(setpoint, x0, how_long, n_samples=1000, Kp=1.0, Ki=0.1, K
         
     return np.array(t_values), np.array(current_values), np.array(omega_values), np.array(u_values), np.array(error_values)
 
-# plot_graphs(time, output, "DC Motor Speed Response" ,"Angular velocity [rad/s]", plot_area_1)
-def plot_graphs_white(time, output, output_label, title, graph_id):
+
+#making plots ----------------------------------
+def plot_graphs(time, output, output_label, title, graph_id):
     #plot motor speed
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=time, y=output, mode="lines", name="ω(t)"))
@@ -235,8 +242,9 @@ def plot_graphs_white(time, output, output_label, title, graph_id):
     iframe.srcdoc = fig.to_html(include_plotlyjs="cdn", full_html=True)
     container.innerHTML = ""
     container.appendChild(iframe)
-
-def plot_graphs(time, output, output_label, title, graph_id):
+#this is tecnically not implemented, ive only added it so when im programming at 3am and i wanna do a quick change in colors i just change these 2 functions to 
+#not oblitarate my eyes with how white the page is.
+def plot_graphs_dark(time, output, output_label, title, graph_id):
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=time,
@@ -272,6 +280,22 @@ def plot_graphs(time, output, output_label, title, graph_id):
     container.innerHTML = ""
     container.appendChild(iframe)
 
+#just a call to plot everything easier
+def plot_everything(time, omega, voltage, current, error):
+
+    plot_graphs(time, omega, "Angular velocity [rad/s]", "DC Motor Speed Response" , "plot_area_1")
+
+    plot_graphs(time, voltage, output_label="Voltage [V]", title="Armature Voltage", graph_id="plot_area_2",)
+    
+    plot_graphs(time, current, "Current", "Current response over time", "plot_area_3")
+
+    plot_graphs(time, error, "Error", "Error over time", "plot_area_4")
+
+#-----------------------------------------------
+
+#in these functions we just make the array of voltages that will be fed to the simulation
+#intuitively there is no PID, because that one responds to the conditions to which the motor is at. thus we cant pre make the voltage that will be inputed to the motor func
+# creating voltages array functions -------------------------------------
 def make_step(t, amplitude: float, t0: float = 0.0, offset: float = 0.0):
     
     """
@@ -309,29 +333,14 @@ def make_sine(t, A: float, omega: float, phi: float = 0.0, delta: float = 0.0):
     t = np.asarray(t, dtype=float)
     return A * np.sin(omega * t + phi) + delta
 
-
 def make_sine_discrete(n, A: float, omega: float, phi: float = 0.0, delta: float = 0.0):
     n = np.asarray(n, dtype=float)   # cast to float so sin() works
     return A * np.sin(omega * n + phi) + delta
+#-----------------------------------------------------------------------
 
-def plot_everything(time, omega, voltage, current, error):
 
-    plot_graphs(time, omega, "Angular velocity [rad/s]", "DC Motor Speed Response" , "plot_area_1")
 
-    plot_graphs(time, voltage, output_label="Voltage [V]", title="Armature Voltage", graph_id="plot_area_2",)
-    
-    plot_graphs(time, current, "Current", "Current response over time", "plot_area_3")
-
-    plot_graphs(time, error, "Error", "Error over time", "plot_area_4")
-
-#i need a function that isnt assigned or async just in case
 def calculate(value, u, t, samples: int = 1000):
-
-
-    
-    # Initial conditions:
-    # current = 0 A
-    # speed = 0 rad/s
     x0 = [0, 0]
 
     # Simulate
@@ -340,29 +349,16 @@ def calculate(value, u, t, samples: int = 1000):
 
     plot_everything(time, omega, voltage, current)
 
-    
-    
     #now actually predicting what the variables of the motor look like
     #estimate_motor_params(t, v, i, omega, Kt_equals_Kb=True)
     dictionary = estimate_motor_params(time, voltage, current, omega, True)
 
     #how do we send dictionary window variable so that it jsut pastes it in the js
-
     window.identify_results = json.dumps(dictionary)
 
 
-    # document.querySelector("#motor_predictions").innerText = str(dictionary)
-
-
-
-
-
-
-
-
-
-
-#step simulate and more prob
+#this contains the whole logic when one plays simulate. it basically calls upon everything above
+#it decides which function was clicked, selects the apropriate information and plots it.
 async def on_play_simulation_button_py(event=None):
     await js.jsReadyPromise  
     
@@ -563,23 +559,69 @@ async def on_play_simulation_button_py(event=None):
     calculate(selected, u, time_amount, time_samples)
 
     #if its step 
-
+#we assing the function to a button in the js. this is because when python is not going to "know" when we delete the button and it exists again to re assign it.
+#thus we just store a variable with the pointer to this function so that it can call it.
 window.on_play_simulation_button_js = on_play_simulation_button_py
 
-# @when("keydown", ".enter_exectute_graphs")
-# def on_key(event):
-#     if event.key == "Enter":
-#         event.preventDefault()
-#         calculate("simulate", 12, 5)
 
 
+
+
+
+#------------------------------------------------------
+#this section will now focus on control for the actual chip. how we connect to it. 
+# As well as communication with it and interactions with how we communicate.
+"""
+we do have some issues that i wanna portray before this starts.
+this following code assumes that there is a machine for each student or person using the machine. 
+as creating a code that assumes that kids can cue instructions for a general machine in a class would be cool, but it feels out of scope. 
+"i am not obligated to do it", id still do it but there might not be enough time for that.
+
+im still brainstorming on the exact infrastructure that we want to build.
+"""
+
+""" BRAINSOTRMIN
+* i wanted this to be available for phones right??
+* the problem is that for that id need to connect to have an internet conversation with the chip
+** the bigger problem with that is HOW?
+- i can connect to a wifi created by the chip.
+    - i can make the chip host the web server as its only a few files. 
+    - the dilemma is the web page requires libraries gotten online which imply that the chip has to have access to the internet.
+
+
+- i can connect on the same LAN as the wifi. meaning the interent which the device is on.
+    - the problem is like ITESO's wifi requires password and i cant imagine how much of a headache that is
+
+
+
+so the problem i have is if i go cable. its easy. but no phone connection.
+if i go internet. i basically HAVE to submit the internet credentials to the chip.
+if i make the chip host. space is 1.21 mb APROX
+so i cant shove everything in there (while true files only need some kb. id be impressed if i could reduce the libraries to that size.)
+so if i cant i need internet access to get them. so if i connect to the chip id have to somehow also get internet at the same time.
+impllying some ethernet connection.
+
+- so we cant host (no internet, or space for libraries)
+- if we make phones available. i have to support the internet method of iteso. and also we have to flash the device each time we want to use it
+- which seems impractical to me (it might not be an issue if the teacher believes students should learn as to how to flash the device)
+
+
+- but if we want this to be a product in the future i have to solve for this.
+- i want the user to simply be able to connect much easier with window boxes without flashing it.
+
+"""
+
+
+
+
+#------------------------------------------------------
+
+#ill later move them above. as it is proper code, but im still wondering as to whether there is going to be multiple files
+#but im worried taht i might need to call upon modifications on the plot functions. as im not sure how theyll interact to live data.
 
 
 
 # Schedule the async function to run
 asyncio.ensure_future(main())
-
-    
-
 
 main()

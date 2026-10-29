@@ -6,6 +6,8 @@
         "matplotlib",
         "plotly",
         "scipy",
-        "simple_pid"
+        "simple_pid",
+        "websockets",
+        "pyserial"
     ]
 }
