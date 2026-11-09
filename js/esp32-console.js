@@ -2,44 +2,67 @@ class ESP32Console extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this.port = null;
-    this.reader = null;
-    this.readLoopPromise = null;
-    this.isReading = false;
 
-    // Stable handler references so we can add/remove them safely
-    this._onConnectClick = () => this.connect();
+    this.device = null;
+    this.server = null;
+    this.txCharacteristic = null; // ESP32 -> browser (notify)
+    this.rxCharacteristic = null; // browser -> ESP32 (write)
+
+    this.isReading = false;
+    this._lineBuffer = '';        // reassemble lines split across BLE packets
+    this._decoder = new TextDecoder();
+
+    // Stable handler references
+    this._onConnectClick    = () => this.connect();
     this._onDisconnectClick = () => this.disconnect();
-    this._onDeviceUnplug = () => this.handleDeviceUnplug();
+    this._onStartClick      = () => this.sendCommand('start');
+    this._onStopClick       = () => this.sendCommand('stop');
+    this._onGattDisconnect  = () => this.handleDeviceUnplug();
+    this._onNotify          = (e) => this.handleNotification(e);
 
     this.shadowRoot.innerHTML = `
-      <h2>ESP32 Serial Monitor</h2>
-      <button id="connectBtn" class="realtime_button">Connect</button>
-      <button id="disconnectBtn" disabled class="realtime_button">Disconnect</button>
+      <style>
+        :host { display: block; font-family: monospace; }
+        button { margin: 2px; padding: 4px 10px; cursor: pointer; }
+        button:disabled { cursor: not-allowed; opacity: 0.5; }
+        #realtime_console {
+          background: #111; color: #0f0; padding: 8px;
+          height: 300px; overflow-y: auto; white-space: pre-wrap;
+          border: 1px solid #333; margin-top: 8px;
+        }
+      </style>
+      <h2>ESP32 BLE Monitor</h2>
+      <button id="connectBtn">Connect</button>
+      <button id="disconnectBtn" disabled>Disconnect</button>
+      <button id="startBtn" disabled>Start</button>
+      <button id="stopBtn"  disabled>Stop</button>
       <div id="realtime_console"></div>
     `;
   }
 
   connectedCallback() {
-    this.connectBtn = this.shadowRoot.getElementById('connectBtn');
+    this.connectBtn    = this.shadowRoot.getElementById('connectBtn');
     this.disconnectBtn = this.shadowRoot.getElementById('disconnectBtn');
-    this.outputDiv = this.shadowRoot.getElementById('realtime_console');
+    this.startBtn      = this.shadowRoot.getElementById('startBtn');
+    this.stopBtn       = this.shadowRoot.getElementById('stopBtn');
+    this.outputDiv     = this.shadowRoot.getElementById('realtime_console');
 
     this.connectBtn.addEventListener('click', this._onConnectClick);
     this.disconnectBtn.addEventListener('click', this._onDisconnectClick);
+    this.startBtn.addEventListener('click', this._onStartClick);
+    this.stopBtn.addEventListener('click', this._onStopClick);
 
-    if (!navigator.serial) {
-      this.log('Error: Web Serial API not supported.');
+    if (!navigator.bluetooth) {
+      this.log('Error: Web Bluetooth not supported. Use Chrome or Edge.');
       this.connectBtn.disabled = true;
     }
   }
 
   disconnectedCallback() {
-    console.warn('ESP32Console: disconnecting properly');
-    // Detach listeners so re-attaching doesn't duplicate them
-    if (this.connectBtn) this.connectBtn.removeEventListener('click', this._onConnectClick);
-    if (this.disconnectBtn) this.disconnectBtn.removeEventListener('click', this._onDisconnectClick);
-    // Can't await in disconnectedCallback — fire and forget
+    this.connectBtn.removeEventListener('click', this._onConnectClick);
+    this.disconnectBtn.removeEventListener('click', this._onDisconnectClick);
+    this.startBtn.removeEventListener('click', this._onStartClick);
+    this.stopBtn.removeEventListener('click', this._onStopClick);
     this.disconnect().catch(() => {});
   }
 
@@ -50,24 +73,91 @@ class ESP32Console extends HTMLElement {
   }
 
   async connect() {
-    if (this.port || this.isReading) return; // guard against double-invoke
-    this.connectBtn.disabled = true;         // lock button immediately
+    if (this.device || this.isReading) return;
+    this.connectBtn.disabled = true;
 
     try {
-      const port = await navigator.serial.requestPort();
-      await port.open({ baudRate: 115200 });
+      // 1. Ask user to pick the ESP32
+      this.device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'ESP32' }],                    // matches "ESP32-BLE-Console"
+        optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+      });
 
-      this.port = port;
-      this.port.addEventListener('disconnect', this._onDeviceUnplug);
+      // 2. Connect to the GATT server
+      this.server = await this.device.gatt.connect();
 
-      this.log('Port opened.');
-      this.disconnectBtn.disabled = false;
+      // 3. Grab the NUS service + both characteristics
+      const service = await this.server.getPrimaryService(
+        '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+      );
+      this.txCharacteristic = await service.getCharacteristic(
+        '6e400003-b5a3-f393-e0a9-e50e24dcca9e' // notify: ESP32 -> us
+      );
+      this.rxCharacteristic = await service.getCharacteristic(
+        '6e400002-b5a3-f393-e0a9-e50e24dcca9e' // write:  us -> ESP32
+      );
+
+      // 4. Subscribe to notifications BEFORE enabling the buttons
+      this.txCharacteristic.addEventListener(
+        'characteristicvaluechanged', this._onNotify
+      );
+      await this.txCharacteristic.startNotifications();
+
+      // 5. Wire up disconnection and enable UI
+      this.device.addEventListener('gattserverdisconnected', this._onGattDisconnect);
       this.isReading = true;
-      this.readLoopPromise = this.readLoop();
+
+      this.log('[CONNECTED to ' + (this.device.name || 'ESP32') + ']');
+      this.connectBtn.disabled    = true;
+      this.disconnectBtn.disabled = false;
+      this.startBtn.disabled      = false;
+      this.stopBtn.disabled       = false;
+
     } catch (err) {
-      this.port = null; // reset on failure
-      this.connectBtn.disabled = false;
       this.log('Error: ' + err.message);
+      await this.disconnect(); // clean up partial state
+    }
+  }
+
+  /**
+   * Write a command to the RX characteristic.
+   * BLE writes are limited to ~20 bytes by default, so keep commands short.
+   */
+  async sendCommand(cmd) {
+    if (!this.rxCharacteristic) {
+      this.log('Not connected.');
+      return;
+    }
+    try {
+      const data = new TextEncoder().encode(cmd);
+      // Prefer writeWithoutResponse for low-latency commands when available,
+      // otherwise fall back to writeValue (acknowledged write).
+      if (this.rxCharacteristic.properties.writeWithoutResponse) {
+        await this.rxCharacteristic.writeValueWithoutResponse(data);
+      } else {
+        await this.rxCharacteristic.writeValue(data);
+      }
+      this.log('>> ' + cmd);
+    } catch (err) {
+      this.log('[WRITE ERROR] ' + err.message);
+    }
+  }
+
+  /**
+   * Called on every notification from the ESP32.
+   * Reassembles lines because notifications can split a single line
+   * across multiple BLE packets (MTU ~20 bytes by default).
+   */
+  handleNotification(event) {
+    const value = event.target.value;
+    this._lineBuffer += this._decoder.decode(value, { stream: true });
+
+    const lines = this._lineBuffer.split('\n');
+    this._lineBuffer = lines.pop(); // keep the unfinished fragment
+
+    for (let line of lines) {
+      line = line.replace(/\r$/, '');
+      if (line.length > 0) this.log(line);
     }
   }
 
@@ -76,62 +166,39 @@ class ESP32Console extends HTMLElement {
     this.disconnect().catch(() => {});
   }
 
-  async readLoop() {
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (this.port && this.port.readable && this.isReading) {
-      try {
-        this.reader = this.port.readable.getReader();
-        while (this.isReading) {
-          const { value, done } = await this.reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop();
-
-          for (let line of lines) {
-            line = line.replace(/\r$/, '');
-            if (line.length > 0) this.log(line);
-          }
-        }
-      } catch (err) {
-        if (this.isReading) this.log('[READ ERROR] ' + err.message);
-      } finally {
-        if (this.reader) {
-          try { this.reader.releaseLock(); } catch (e) {}
-          this.reader = null;
-        }
-      }
-    }
-  }
-
   async disconnect() {
-    if (!this.isReading && !this.port) return;
+    if (!this.device && !this.isReading) return;
     this.isReading = false;
 
-    // 1. Wake up the pending read() so readLoop can exit
-    if (this.reader) {
-      try { await this.reader.cancel(); } catch (e) {}
+    // 1. Stop notifications on TX
+    if (this.txCharacteristic) {
+      try { this.txCharacteristic.removeEventListener(
+              'characteristicvaluechanged', this._onNotify); } catch (e) {}
+      try { await this.txCharacteristic.stopNotifications(); } catch (e) {}
     }
 
-    // 2. Wait for readLoop to finish and release the reader lock
-    if (this.readLoopPromise) {
-      try { await this.readLoopPromise; } catch (e) {}
-      this.readLoopPromise = null;
+    // 2. Drop the GATT connection
+    if (this.device) {
+      try { this.device.removeEventListener(
+              'gattserverdisconnected', this._onGattDisconnect); } catch (e) {}
+      if (this.device.gatt.connected) {
+        try { this.device.gatt.disconnect(); } catch (e) {}
+      }
     }
 
-    // 3. Only now is it safe to close the port
-    if (this.port) {
-      try { this.port.removeEventListener('disconnect', this._onDeviceUnplug); } catch (e) {}
-      try { await this.port.close(); } catch (e) {}
-      this.port = null;
-    }
+    // 3. Reset state
+    this.device           = null;
+    this.server           = null;
+    this.txCharacteristic = null;
+    this.rxCharacteristic = null;
+    this._lineBuffer      = '';
 
+    // 4. Reset UI
     if (this.connectBtn) {
-      this.connectBtn.disabled = false;
+      this.connectBtn.disabled    = false;
       this.disconnectBtn.disabled = true;
+      this.startBtn.disabled      = true;
+      this.stopBtn.disabled       = true;
     }
   }
 }

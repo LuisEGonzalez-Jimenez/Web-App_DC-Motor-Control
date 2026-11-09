@@ -8,9 +8,9 @@
     --mewhite_darker:rgb(245, 245, 245); 
     --consoleBackground:rgb(0, 0, 0); 
 
-    
-    
+     
 /*     
+
     --meblue:rgba(67, 30, 245);
     --megrey: rgba(12, 10, 9);
     --medarkergrey: rgb(17, 15, 18);
@@ -18,8 +18,8 @@
     --mewhite_darker: rgb(10, 10, 10);
     --textColor:rgb(150, 150, 150);
     --consoleBackground:rgb(0, 0, 0); 
+
      */
-    
 
     --sbh:50px;
     --sdborderWidth:9.8px;
@@ -48,7 +48,7 @@
     padding: 0;
     margin: 0;
     color: var(--textColor);
-    background-color: var(--mewhite_background);
+    /* background-color: var(--mewhite_background); */
     
 }
 
