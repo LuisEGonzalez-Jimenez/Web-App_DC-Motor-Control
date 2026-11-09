@@ -1156,17 +1156,18 @@ function changes_caused_by_sri_buttons(where_is_this_code_called, from_state, to
     //adittionally from state and to state basically beahve the same when inside of sri call, because they are in the same state just changing the sri
 
     if(where_is_this_code_called == CCBSB_EXEC_SRI){
+        console.warn("SRI cahngess in visibility");
         
         //this is step visibility functions.
-            //if we are in step and changing to real motor.
+        //if we are in step and changing to real motor.
         if(to_state == STEP){
             if(to_sri == REAL_TIME_CONTROL)
                 invertVisibility(document.getElementById("CycleDutyBox"));
             
-                //if we are in Step and we are getting out of real time control and we are currently in realtime control
+            //if we are in Step and we are getting out of real time control and we are currently in realtime control
             if(to_sri != REAL_TIME_CONTROL && from_sri == REAL_TIME_CONTROL)
                 invertVisibility(document.getElementById("CycleDutyBox"));
-    
+            
             //System identification changes when clicking the button
             if(to_sri == SYSTEM_IDENTIFICATION)
                 invertVisibility(document.getElementById("step_box_1"));
@@ -1180,27 +1181,55 @@ function changes_caused_by_sri_buttons(where_is_this_code_called, from_state, to
                 invertVisibility(document.getElementById("condis_group_id"));
                 invertVisibility(document.getElementById("sine_main_formula_container_id"));
             }
-                
-            //if we are in Step and we are getting out of real time control and we are currently in realtime control
+            
             if(to_sri != SYSTEM_IDENTIFICATION && from_sri == SYSTEM_IDENTIFICATION){
                 invertVisibility(document.getElementById("condis_group_id"));
                 invertVisibility(document.getElementById("sine_main_formula_container_id"));
             }
         }
-
-
+        if(to_state == PID){
+            if(to_sri == SYSTEM_IDENTIFICATION){
+                invertVisibility(document.getElementById("pid_subgroup_box1"));
+                invertVisibility(document.getElementById("pid_subgroup_box2"));
+                invertVisibility(document.getElementById("pid_subgroup_box3"));
+                invertVisibility(document.getElementById("pid_subgroup_box4"));
+                
+            }
+            
+            if(to_sri != SYSTEM_IDENTIFICATION && from_sri == SYSTEM_IDENTIFICATION){
+                invertVisibility(document.getElementById("pid_subgroup_box1"));
+                invertVisibility(document.getElementById("pid_subgroup_box2"));
+                invertVisibility(document.getElementById("pid_subgroup_box3"));
+                invertVisibility(document.getElementById("pid_subgroup_box4"));
+            }
+        }
+        
+        
     }
     else if(where_is_this_code_called == CCBSB_EXEC_CHANGE_TO_SECTION){
+        console.warn("SRI changes in section");
         if(from_state == INITIATE){
             return 0;
         }
-
+        
         if(from_state != STEP && to_state == STEP){
+            if(to_sri == SYSTEM_IDENTIFICATION){
+                invertVisibility(document.getElementById("step_box_1"));
+            }
+        }
+        if(from_state != SINE && to_state == SINE){
             if(to_sri == SYSTEM_IDENTIFICATION){
                 invertVisibility(document.getElementById("condis_group_id"));
                 invertVisibility(document.getElementById("sine_main_formula_container_id"));
             }
-
+        }
+        if(from_state != PID && to_state == PID){
+            if(to_sri == SYSTEM_IDENTIFICATION){
+                invertVisibility(document.getElementById("pid_subgroup_box1"));
+                invertVisibility(document.getElementById("pid_subgroup_box2"));
+                invertVisibility(document.getElementById("pid_subgroup_box3"));
+                invertVisibility(document.getElementById("pid_subgroup_box4"));
+            }
         }
     }
 }
@@ -1716,6 +1745,7 @@ function change_to_PID(condis) {
 
     //create sidebar group with heights:
     const sbg = creating_sidebar_group(sbc);
+    sbg.id = "pid_subgroup_box1";
 
     //create continuous or discrete
     if (condis == CONTINUOUS) {
@@ -1744,7 +1774,7 @@ function change_to_PID(condis) {
     //conatiner one having 
     const sbg2 = document.createElement('div');
     sbg2.classList.add('sidebar_group');
-    sbg2.classList.add('sbgh4');
+    sbg2.id = "pid_subgroup_box2";
     sbc.appendChild(sbg2);
 
     //formula
@@ -1831,7 +1861,7 @@ function change_to_PID(condis) {
     //container 2
     const sbg3 = document.createElement('div');
     sbg3.classList.add('sidebar_group');
-    sbg3.classList.add('sbgh1_bigger_60');
+    sbg3.id = "pid_subgroup_box3";
     sbc.appendChild(sbg3);
 
     const bf1 = sbf_gains(
@@ -1847,7 +1877,7 @@ function change_to_PID(condis) {
 
     const sbg4 = document.createElement('div');
     sbg4.classList.add('sidebar_group');
-    sbg4.classList.add('sbgh3');
+    sbg4.id = "pid_subgroup_box4";
     sbc.appendChild(sbg4);
 
 

@@ -52,7 +52,10 @@
     
 }
 
-/* basic elements and their respective insisdes */
+/*SCROLL BAR edge issue*/
+html {
+  scrollbar-gutter: stable;
+}
 
 /*LOADING SCREEN ------------------------------------------------------*/
 .loading_screen{
