@@ -289,7 +289,11 @@ def plot_everything(time, omega, voltage, current, error):
     
     plot_graphs(time, current, "Current", "Current response over time", "plot_area_3")
 
-    plot_graphs(time, error, "Error", "Error over time", "plot_area_4")
+    if(error):
+        plot_graphs(time, error, "Error", "Error over time", "plot_area_4")
+    else:
+        document.getElementById("plot_area_4").innerHTML = ""
+
 
 #-----------------------------------------------
 
@@ -346,8 +350,8 @@ def calculate(value, u, t, samples: int = 1000):
     # Simulate
     # def run_simulation(u, vcc: float, x0, time series, n_samples: int = 1000):
     time, current, omega, voltage = run_simulation(u, x0, t, samples)
-
-    plot_everything(time, omega, voltage, current)
+    print("we gonna call plt everything with a false error PLEASE")
+    plot_everything(time, omega, voltage, current, False)
 
     #now actually predicting what the variables of the motor look like
     #estimate_motor_params(t, v, i, omega, Kt_equals_Kb=True)
@@ -571,45 +575,7 @@ window.on_play_simulation_button_js = on_play_simulation_button_py
 #------------------------------------------------------
 #this section will now focus on control for the actual chip. how we connect to it. 
 # As well as communication with it and interactions with how we communicate.
-"""
-we do have some issues that i wanna portray before this starts.
-this following code assumes that there is a machine for each student or person using the machine. 
-as creating a code that assumes that kids can cue instructions for a general machine in a class would be cool, but it feels out of scope. 
-"i am not obligated to do it", id still do it but there might not be enough time for that.
 
-im still brainstorming on the exact infrastructure that we want to build.
-"""
-
-""" BRAINSOTRMIN
-* i wanted this to be available for phones right??
-* the problem is that for that id need to connect to have an internet conversation with the chip
-** the bigger problem with that is HOW?
-- i can connect to a wifi created by the chip.
-    - i can make the chip host the web server as its only a few files. 
-    - the dilemma is the web page requires libraries gotten online which imply that the chip has to have access to the internet.
-
-
-- i can connect on the same LAN as the wifi. meaning the interent which the device is on.
-    - the problem is like ITESO's wifi requires password and i cant imagine how much of a headache that is
-
-
-
-so the problem i have is if i go cable. its easy. but no phone connection.
-if i go internet. i basically HAVE to submit the internet credentials to the chip.
-if i make the chip host. space is 1.21 mb APROX
-so i cant shove everything in there (while true files only need some kb. id be impressed if i could reduce the libraries to that size.)
-so if i cant i need internet access to get them. so if i connect to the chip id have to somehow also get internet at the same time.
-impllying some ethernet connection.
-
-- so we cant host (no internet, or space for libraries)
-- if we make phones available. i have to support the internet method of iteso. and also we have to flash the device each time we want to use it
-- which seems impractical to me (it might not be an issue if the teacher believes students should learn as to how to flash the device)
-
-
-- but if we want this to be a product in the future i have to solve for this.
-- i want the user to simply be able to connect much easier with window boxes without flashing it.
-
-"""
 
 
 

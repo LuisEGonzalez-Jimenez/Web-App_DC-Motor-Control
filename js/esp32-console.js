@@ -1,3 +1,5 @@
+import { LivePlotter } from './livePlotter.js';
+
 class ESP32Console extends HTMLElement {
   constructor() {
     super();
@@ -27,7 +29,7 @@ class ESP32Console extends HTMLElement {
         button:disabled { cursor: not-allowed; opacity: 0.5; }
         #realtime_console {
           background: #111; color: #0f0; padding: 8px;
-          height: 300px; overflow-y: auto; white-space: pre-wrap;
+          height: 200px; overflow-y: auto; white-space: pre-wrap;
           border: 1px solid #333; margin-top: 8px;
         }
       </style>
@@ -46,6 +48,12 @@ class ESP32Console extends HTMLElement {
     this.startBtn      = this.shadowRoot.getElementById('startBtn');
     this.stopBtn       = this.shadowRoot.getElementById('stopBtn');
     this.outputDiv     = this.shadowRoot.getElementById('realtime_console');
+
+    // Grab the external container from index.html
+    const plotContainer = document.getElementById('plot_area_1');
+    if (plotContainer) {
+      this.plotter = new LivePlotter(plotContainer, 'Motor RPM', 100);
+    }
 
     this.connectBtn.addEventListener('click', this._onConnectClick);
     this.disconnectBtn.addEventListener('click', this._onDisconnectClick);
@@ -142,7 +150,6 @@ class ESP32Console extends HTMLElement {
       this.log('[WRITE ERROR] ' + err.message);
     }
   }
-
   /**
    * Called on every notification from the ESP32.
    * Reassembles lines because notifications can split a single line
@@ -153,11 +160,24 @@ class ESP32Console extends HTMLElement {
     this._lineBuffer += this._decoder.decode(value, { stream: true });
 
     const lines = this._lineBuffer.split('\n');
-    this._lineBuffer = lines.pop(); // keep the unfinished fragment
+    this._lineBuffer = lines.pop();
 
     for (let line of lines) {
       line = line.replace(/\r$/, '');
-      if (line.length > 0) this.log(line);
+      if (line.length > 0) {
+        this.log(line);
+
+        // Parse "RPM:123.45" sent by the ESP32
+        if (line.startsWith('RPM:')) {
+          const rpmValue = parseFloat(line.split(':')[1]);
+          if (!isNaN(rpmValue) && this.plotter) {
+            const timestamp = new Date().toLocaleTimeString([], { 
+              hour12: false, minute: '2-digit', second: '2-digit' 
+            });
+            this.plotter.graphData(timestamp, rpmValue);
+          }
+        }
+      }
     }
   }
 

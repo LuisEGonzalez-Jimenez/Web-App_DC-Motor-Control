@@ -7,6 +7,7 @@
         <link rel="stylesheet" href="https://pyscript.net/releases/2026.7.3/core.css" />
         <script type="module" src="https://pyscript.net/releases/2026.7.3/core.js"></script>
         <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     </head>
     <body>
         
@@ -53,8 +54,7 @@
         <!-- graph area -->
         <div class="graph_area">
             <div class="container_graph_1" id="id_graph_container_1">
-                <div></div>
-                <div class="actual_graph" id="plot_area_1"></div>
+                <div class="actual_graph" id="plot_area_1" style="width: 95%; height: 90%;" ></div>
             </div>
             <div class="container_graph_1" id="id_graph_container_2">
                 <div class="actual_graph" id="plot_area_2"></div>
@@ -69,7 +69,8 @@
 
 
         <script src="js/script.js"></script>
-        <script src="js/esp32-console.js" defer></script>
+        <script src="js/livePlotter.js" defer type="module"></script>
+        <script src="js/esp32-console.js" defer type="module"></script>
         <!-- TODO: this should be injected later at the end of the js file after having placed a 
         loading screen. first thing the pyhton file shoudl do is remove this loading screen.
         takes          
