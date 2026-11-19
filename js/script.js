@@ -1,3 +1,6 @@
+import { LivePlotter } from './livePlotter.js';
+
+
 //sidebar Functionality ---------------------------
 const INITIATE = -1;
 const STEP = 0;
@@ -21,10 +24,13 @@ const CCBSB_EXEC_SRI = 0;
 const CCBSB_EXEC_CHANGE_TO_SECTION = 1;
 
 
-window.sb_state = INITIATE; 
+window.sb_state = INITIATE;
 window.sb_condis = CONTINUOUS;
 window.sim_area = SIMULATED_CONTROL;
-graphs_state = SPEED_AND_VOLTAGE;
+let graphs_state = SPEED_AND_VOLTAGE;
+
+//this is for the console
+let esp = null;
 
 window.simulate_time = 10;
 window.real_vcc = 12;
@@ -58,13 +64,6 @@ window.pid_dis = {
     sample_time: 0.001
 };
 
-// Create a promise and expose it on the window object
-window.jsReadyPromise = new Promise((resolve) => {
-    // Store the resolve function so you can call it later
-    window.resolveJsReady = resolve;
-});
-
-
 //Ra = 1.19; La = 0.013; Kb = 0.78; Kt = 0.6; Jm = 0.8; Bm = 0.1;
 
 //this is no longer in use
@@ -74,7 +73,7 @@ window.simulate_motor = {
     back_electromotive_force_constant: 0.78,
     torque_constant: 0.6,
     motor_rotor_inertia: 0.8,
-    viscous_friction_coefficient: 0.1 
+    viscous_friction_coefficient: 0.1
 };
 
 
@@ -577,6 +576,7 @@ icons["load"] = `
 icons["circle"] = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" style="width:16px; margin-right:7px;"><!--!Font Awesome Free v7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.-->
     <path 
+        id="statusCircleId"
         fill="red" 
         stroke="#222222"
         stroke-width="40"
@@ -606,7 +606,7 @@ these 6 functions save the data of the input boxes when one exits them.
 they probably could be refactor into a single function called save all data. 
 but this works
 ---------------------------------------------------------------*/
-function save_step_data(){
+function save_step_data() {
     window.step["amp"] = document.getElementById("UI_amp").value;
     window.step["it"] = document.getElementById("UI_it").value;
     window.step["offset"] = document.getElementById("UI_offset").value;
@@ -618,28 +618,28 @@ function save_step_data(){
     save_sim_area_data();
 
 }
-function save_sine_con_data(){
+function save_sine_con_data() {
     console.warn("save con data");
     window.sine_con["amp"] = document.getElementById("UI_amp").value;
     window.sine_con["freq"] = document.getElementById("UI_freq").value;
     window.sine_con["phase_angle"] = document.getElementById("UI_phase_angle").value;
     window.sine_con["offset"] = document.getElementById("UI_offset").value;
-    
+
     save_sim_area_data();
-    
+
 }
-function save_sine_dis_data(){
+function save_sine_dis_data() {
     console.warn("save dis data");
     window.sine_con["amp"] = document.getElementById("UI_amp").value;
     window.sine_con["freq"] = document.getElementById("UI_freq").value;
     window.sine_con["phase_angle"] = document.getElementById("UI_phase_angle").value;
     window.sine_con["offset"] = document.getElementById("UI_offset").value;
     window.sine_dis["period"] = document.getElementById("UI_period").value;
-    
+
     save_sim_area_data();
-    
+
 }
-function save_pid_con_data(){
+function save_pid_con_data() {
     window.pid_con["ts"] = document.getElementById("UI_ts").value;
     window.pid_con["kp"] = document.getElementById("UI_gainskp").value;
     window.pid_con["ki"] = document.getElementById("UI_gainski").value;
@@ -647,7 +647,7 @@ function save_pid_con_data(){
 
     save_sim_area_data();
 }
-function save_pid_dis_data(){
+function save_pid_dis_data() {
     console.warn("save dis data");
     window.pid_con["ts"] = document.getElementById("UI_ts").value;
     window.pid_con["kp"] = document.getElementById("UI_gainskp").value;
@@ -656,9 +656,9 @@ function save_pid_dis_data(){
     window.pid_con["sample_time"] = document.getElementById("UI_sample_time").value;
 
     save_sim_area_data();
-    
+
 }
-function save_sim_data(){
+function save_sim_data() {
 
     window.simulate_motor.armature_resistance = document.getElementById("UI_armature_resistance").value;
     window.simulate_motor.armature_inductance = document.getElementById("UI_armature_inductance").value;
@@ -666,14 +666,14 @@ function save_sim_data(){
     window.simulate_motor.torque_constant = document.getElementById("UI_torque_constant").value;
     window.simulate_motor.motor_rotor_inertia = document.getElementById("UI_motor_rotor_inertia").value;
     window.simulate_motor.viscous_friction_coefficient = document.getElementById("UI_viscous_friction_coefficient").value;
-        
+
 
 }
 
 /*---------------------------------------------------------------
 these 2 functiosns basically create basic forms of input boxes or sidebar boxes.
 ---------------------------------------------------------------*/
-function sbf_basicform(action, for_d, label_text, Unitofmeasure, type, step, value=0, size=7) {
+function sbf_basicform(action, for_d, label_text, Unitofmeasure, type, step, value = 0, size = 7) {
 
     //unit of measure is genuinly different symbols and it changes a lot,
     //  so im going to do a list, and each of these is gonna have their 
@@ -756,34 +756,34 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     input.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input.name = for_d + "kp"; //Amp 
     input.id = "UI_" + for_d + "kp"; //UI_amp
-    input.style.width = 8 + "em"; 
+    input.style.width = 8 + "em";
     input.value = window.pid_con["kp"];
     div.appendChild(input);
-    
-    
-    
+
+
+
     div.insertAdjacentHTML("beforeend", dictionaryUnitsOfMeasure["gains_ki"]);
-    
+
     const input2 = document.createElement("input");
     input2.type = type; //number
     input2.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input2.name = for_d + "ki"; //Amp 
     input2.id = "UI_" + for_d + "ki"; //UI_amp
-    input2.style.width = 8 + "em"; 
+    input2.style.width = 8 + "em";
     input2.value = window.pid_con["ki"];
     div.appendChild(input2);
-    
-    
-    
+
+
+
 
     div.insertAdjacentHTML("beforeend", dictionaryUnitsOfMeasure["gains_kd"]);
-    
+
     const input3 = document.createElement("input");
     input3.type = type; //number
     input3.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input3.name = for_d + "kd"; //Amp 
     input3.id = "UI_" + for_d + "kd"; //UI_amp
-    input3.style.width = 8 + "em"; 
+    input3.style.width = 8 + "em";
     input3.value = window.pid_con["kd"];
     div.appendChild(input3);
 
@@ -806,23 +806,23 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
 functions each of the side bar states need
 ---------------------------------------------------------------*/
 //delete all from side bar
-function clean_sidebar(father){
+function clean_sidebar(father) {
     //the logic behind this is that when we start clearing any page, we want to save data
-    if(window.sb_state == STEP){
+    if (window.sb_state == STEP) {
         save_step_data();
-    } else if(window.sb_state == SINE){
+    } else if (window.sb_state == SINE) {
 
         //we are entering anything that is not sine and the sb_state hasnt changed, then lets save this info
-        if(window.sb_condis == CONTINUOUS){
+        if (window.sb_condis == CONTINUOUS) {
             save_sine_con_data();
-        } else{
+        } else {
             save_sine_dis_data();
         }
-        
-    } else if(window.sb_state == PID){
-        if(window.sb_condis == CONTINUOUS){
+
+    } else if (window.sb_state == PID) {
+        if (window.sb_condis == CONTINUOUS) {
             save_pid_con_data();
-        } else{
+        } else {
             save_pid_dis_data();
         }
     }
@@ -830,7 +830,7 @@ function clean_sidebar(father){
     father.removeChild(document.getElementById("sb_contents"));
 }
 //  main div for side bar contents
-function creating_sidebar_contents(father){
+function creating_sidebar_contents(father) {
     let sidebar_contents = document.createElement('div');
     sidebar_contents.classList.add('sidebar_contents_css');
     sidebar_contents.setAttribute('id', 'sb_contents');
@@ -838,7 +838,7 @@ function creating_sidebar_contents(father){
     return sidebar_contents;
 }
 // a sub division within the side bar. wasy way to create it and return it
-function creating_sidebar_group(father){
+function creating_sidebar_group(father) {
     let creating_sbg = document.createElement('div');
     creating_sbg.classList.add('sidebar_group');
     father.appendChild(creating_sbg);
@@ -852,7 +852,7 @@ changing the colors of the button for the side bar state.
 you tecnically need both previous and the state you are moving to. 
 but the previous state is a global variable thus it is infered from there.
 ---------------------------------------------------------------*/
-function change_button_highlights(current_button){
+function change_button_highlights(current_button) {
     //sb state is the previously highlighted button
     //current button should be the new one to highlight
     let b_previous_button;
@@ -879,7 +879,7 @@ function change_button_highlights(current_button){
     }
 
 
-    
+
     b_previous_button.classList.add("sb_button");
     b_previous_button.classList.remove("sb_button_selected");
 
@@ -896,11 +896,11 @@ motor parameters for simulation functionality.
 
 you see that button that says edit motor parameters. basically these 3 functions are in charge of all of it.
 ---------------------------------------------------------------*/
-function mp_close_func(){
+function mp_close_func() {
     save_sim_data();
     document.body.removeChild(document.getElementById("mp_menu"));
 }
-function summon_mp_menu(){
+function summon_mp_menu() {
     const background = document.createElement("div");
     background.className = "mp_background";
     background.id = "mp_menu"
@@ -911,7 +911,7 @@ function summon_mp_menu(){
     const top = document.createElement("div");
     top.id = "mp_box_top";
 
-    
+
 
     //Create close mp
     const close_mp = document.createElement("img");
@@ -924,16 +924,16 @@ function summon_mp_menu(){
     close_mp.addEventListener("click", mp_close_func);
 
     // Add GIF to contents
-    
-    
-    
-    
+
+
+
+
     const contents = document.createElement("div");
     contents.id = "mp_box_contents";
-    
+
     box.appendChild(top);
     top.appendChild(close_mp)
-    
+
 
     box.appendChild(contents);
 
@@ -949,7 +949,7 @@ function summon_mp_menu(){
 
     //create sidebar group with heights:
     const sbg = creating_sidebar_group(sbc);
-    
+
 
     const armature_resistance = sbf_basicform(
         "/communicationScript.py",
@@ -957,12 +957,12 @@ function summon_mp_menu(){
         "Armature resistance:",
         dictionaryUnitsOfMeasure["armature_resistance"],
         "number",
-        0.01, 
+        0.01,
         window.simulate_motor.armature_resistance,
         6
     );
     sbg.appendChild(armature_resistance);
-    
+
     const armature_inductance = sbf_basicform(
         "/communicationScript.py",
         "armature_inductance",
@@ -986,7 +986,7 @@ function summon_mp_menu(){
         6
     );
     sbg.appendChild(back_electromotive_force_constant);
-    
+
 
     const torque_constant = sbf_basicform(
         "/communicationScript.py",
@@ -1029,7 +1029,7 @@ function summon_mp_menu(){
 
 
 }
-function create_area_for_motor_parameters(father){
+function create_area_for_motor_parameters(father) {
     const sb_elements = document.createElement('div');
     sb_elements.classList.add('sidebar_basic_elements');
     father.appendChild(sb_elements);
@@ -1055,7 +1055,7 @@ These functions now below each assing some form of value to the area that has th
 - System Identification
 ---------------------------------------------------------------*/
 //this function in particular just creates the 3 buttons and assings them their events.
-function sim_real_identification(father, selected_button, state_clicked){
+function sim_real_identification(father, selected_button, state_clicked) {
     const buttonContainer = document.createElement("div");
     buttonContainer.classList.add("sri_area");
     father.appendChild(buttonContainer);
@@ -1065,34 +1065,34 @@ function sim_real_identification(father, selected_button, state_clicked){
 
     const button_sim_1 = document.createElement("button");
     button_sim_1.innerText = "Simulated control";
-    if(selected_button == SIMULATED_CONTROL){
+    if (selected_button == SIMULATED_CONTROL) {
         button_sim_1.classList.add("sri_button_selected");
-    } else{
+    } else {
         button_sim_1.classList.add("sri_button");
     }
     button_sim_1.id = "b_simulated_control";
     buttonContainer.appendChild(button_sim_1);
-    
+
     const button_sim_2 = document.createElement("button");
     button_sim_2.innerText = "Real Time Control";
-    if(selected_button == REAL_TIME_CONTROL){
+    if (selected_button == REAL_TIME_CONTROL) {
         button_sim_2.classList.add("sri_button_selected");
-    } else{
+    } else {
         button_sim_2.classList.add("sri_button");
     }
     button_sim_2.id = "b_real_time_control";
     buttonContainer.appendChild(button_sim_2);
-    
+
     const button_sim_3 = document.createElement("button");
     button_sim_3.innerText = "System Identification";
-    if(selected_button == SYSTEM_IDENTIFICATION){
+    if (selected_button == SYSTEM_IDENTIFICATION) {
         button_sim_3.classList.add("sri_button_selected");
-    } else{
+    } else {
         button_sim_3.classList.add("sri_button");
     }
     button_sim_3.id = "b_system_identification";
     buttonContainer.appendChild(button_sim_3);
-    
+
     //assing funtions to each of these.
     button_sim_1.addEventListener("click", () => {
         simulate_area(father, SIMULATED_CONTROL, state_clicked);
@@ -1109,8 +1109,8 @@ function sim_real_identification(father, selected_button, state_clicked){
 
 }
 //changes the button highlights
-function change_sim_area_buttons_colors(selected_button){
-    
+function change_sim_area_buttons_colors(selected_button) {
+
     let b_previous_button;
     if (window.sim_area == SIMULATED_CONTROL) {
         b_previous_button = document.getElementById("b_simulated_control");
@@ -1118,9 +1118,9 @@ function change_sim_area_buttons_colors(selected_button){
         b_previous_button = document.getElementById("b_real_time_control");
     } else if (window.sim_area == SYSTEM_IDENTIFICATION) {
         b_previous_button = document.getElementById("b_system_identification");
-    } 
-    
-    
+    }
+
+
     let selected_button_element;
     if (selected_button == SIMULATED_CONTROL) {
         selected_button_element = document.getElementById("b_simulated_control");
@@ -1128,12 +1128,12 @@ function change_sim_area_buttons_colors(selected_button){
         selected_button_element = document.getElementById("b_real_time_control");
     } else if (selected_button == SYSTEM_IDENTIFICATION) {
         selected_button_element = document.getElementById("b_system_identification");
-    } 
-    
-    
+    }
+
+
     b_previous_button.classList.add("sri_button");
     b_previous_button.classList.remove("sri_button_selected");
-    
+
     selected_button_element.classList.remove("sri_button");
     selected_button_element.classList.add("sri_button_selected");
 
@@ -1141,7 +1141,7 @@ function change_sim_area_buttons_colors(selected_button){
 
 }
 //this changes whats shown or hidden with each of the windows
-function changes_caused_by_sri_buttons(where_is_this_code_called, from_state, to_state, from_sri, to_sri){
+function changes_caused_by_sri_buttons(where_is_this_code_called, from_state, to_state, from_sri, to_sri) {
     //example call : changes_caused_by_sri_buttons(CCBSB_EXEC_CHANGE_TO_SECTION, window.sb_state, STEP, window.sim_area);
     //this function agregates all the visibility chagnes done to the sidebar.
     //we are working in lines 
@@ -1155,76 +1155,76 @@ function changes_caused_by_sri_buttons(where_is_this_code_called, from_state, to
 
     //adittionally from state and to state basically beahve the same when inside of sri call, because they are in the same state just changing the sri
 
-    if(where_is_this_code_called == CCBSB_EXEC_SRI){
+    if (where_is_this_code_called == CCBSB_EXEC_SRI) {
         console.warn("SRI cahngess in visibility");
-        
+
         //this is step visibility functions.
         //if we are in step and changing to real motor.
-        if(to_state == STEP){
-            if(to_sri == REAL_TIME_CONTROL)
+        if (to_state == STEP) {
+            if (to_sri == REAL_TIME_CONTROL)
                 invertVisibility(document.getElementById("CycleDutyBox"));
-            
+
             //if we are in Step and we are getting out of real time control and we are currently in realtime control
-            if(to_sri != REAL_TIME_CONTROL && from_sri == REAL_TIME_CONTROL)
+            if (to_sri != REAL_TIME_CONTROL && from_sri == REAL_TIME_CONTROL)
                 invertVisibility(document.getElementById("CycleDutyBox"));
-            
+
             //System identification changes when clicking the button
-            if(to_sri == SYSTEM_IDENTIFICATION)
+            if (to_sri == SYSTEM_IDENTIFICATION)
                 invertVisibility(document.getElementById("step_box_1"));
-            
+
             //if we are in Step and we are getting out of real time control and we are currently in realtime control
-            if(to_sri != SYSTEM_IDENTIFICATION && from_sri == SYSTEM_IDENTIFICATION)
+            if (to_sri != SYSTEM_IDENTIFICATION && from_sri == SYSTEM_IDENTIFICATION)
                 invertVisibility(document.getElementById("step_box_1"));
         }
-        if(to_state == SINE){
-            if(to_sri == SYSTEM_IDENTIFICATION){
+        if (to_state == SINE) {
+            if (to_sri == SYSTEM_IDENTIFICATION) {
                 invertVisibility(document.getElementById("condis_group_id"));
                 invertVisibility(document.getElementById("sine_main_formula_container_id"));
             }
-            
-            if(to_sri != SYSTEM_IDENTIFICATION && from_sri == SYSTEM_IDENTIFICATION){
+
+            if (to_sri != SYSTEM_IDENTIFICATION && from_sri == SYSTEM_IDENTIFICATION) {
                 invertVisibility(document.getElementById("condis_group_id"));
                 invertVisibility(document.getElementById("sine_main_formula_container_id"));
             }
         }
-        if(to_state == PID){
-            if(to_sri == SYSTEM_IDENTIFICATION){
+        if (to_state == PID) {
+            if (to_sri == SYSTEM_IDENTIFICATION) {
                 invertVisibility(document.getElementById("pid_subgroup_box1"));
                 invertVisibility(document.getElementById("pid_subgroup_box2"));
                 invertVisibility(document.getElementById("pid_subgroup_box3"));
                 invertVisibility(document.getElementById("pid_subgroup_box4"));
-                
+
             }
-            
-            if(to_sri != SYSTEM_IDENTIFICATION && from_sri == SYSTEM_IDENTIFICATION){
+
+            if (to_sri != SYSTEM_IDENTIFICATION && from_sri == SYSTEM_IDENTIFICATION) {
                 invertVisibility(document.getElementById("pid_subgroup_box1"));
                 invertVisibility(document.getElementById("pid_subgroup_box2"));
                 invertVisibility(document.getElementById("pid_subgroup_box3"));
                 invertVisibility(document.getElementById("pid_subgroup_box4"));
             }
         }
-        
-        
+
+
     }
-    else if(where_is_this_code_called == CCBSB_EXEC_CHANGE_TO_SECTION){
+    else if (where_is_this_code_called == CCBSB_EXEC_CHANGE_TO_SECTION) {
         console.warn("SRI changes in section");
-        if(from_state == INITIATE){
+        if (from_state == INITIATE) {
             return 0;
         }
-        
-        if(from_state != STEP && to_state == STEP){
-            if(to_sri == SYSTEM_IDENTIFICATION){
+
+        if (from_state != STEP && to_state == STEP) {
+            if (to_sri == SYSTEM_IDENTIFICATION) {
                 invertVisibility(document.getElementById("step_box_1"));
             }
         }
-        if(from_state != SINE && to_state == SINE){
-            if(to_sri == SYSTEM_IDENTIFICATION){
+        if (from_state != SINE && to_state == SINE) {
+            if (to_sri == SYSTEM_IDENTIFICATION) {
                 invertVisibility(document.getElementById("condis_group_id"));
                 invertVisibility(document.getElementById("sine_main_formula_container_id"));
             }
         }
-        if(from_state != PID && to_state == PID){
-            if(to_sri == SYSTEM_IDENTIFICATION){
+        if (from_state != PID && to_state == PID) {
+            if (to_sri == SYSTEM_IDENTIFICATION) {
                 invertVisibility(document.getElementById("pid_subgroup_box1"));
                 invertVisibility(document.getElementById("pid_subgroup_box2"));
                 invertVisibility(document.getElementById("pid_subgroup_box3"));
@@ -1234,22 +1234,124 @@ function changes_caused_by_sri_buttons(where_is_this_code_called, from_state, to
     }
 }
 //saving sim area data
-function save_sim_area_data(){
-    if(window.sim_area == REAL_TIME_CONTROL){
+function save_sim_area_data() {
+    if (window.sim_area == REAL_TIME_CONTROL) {
         window.real_vcc = document.getElementById("UI_vcc").value;
     }
-    else if(window.sim_area == SIMULATED_CONTROL){
+    else if (window.sim_area == SIMULATED_CONTROL) {
         window.simulate_time = document.getElementById("UI_time").value;
     }
 
 }
 
+
+
+/*
+================================================
+ASSIGNING FUNCTIONALITY TO ALL BUTTONS TO CONNECT TO THE ESP32
+------------------------------------------------
+*/
+
+/* ---------- DOM helpers ---------- */
+const $ = (sel) => document.querySelector(sel);
+
+const num = (sel, def = 0) => {
+    const el = $(sel);
+    if (!el) { console.warn('[ctl] missing field', sel); return def; }
+    const v = parseFloat(el.value);
+    return Number.isFinite(v) ? v : def;
+};
+
+const bool = (sel, def = false) => {
+    const el = $(sel);
+    return el ? !!el.checked : def;
+};
+
+const log = (msg) => esp.log('[ctl] ' + msg);
+
+
+
+
+
+/* ---------- command builders (one per mode) ---------- */
+
+function buildStep() {
+    return {
+        interruptor: 'on',
+        Type: 'Step',
+        VCC: num('#step-vcc', 12),
+        A: num('#step-a', 6),
+        t0: num('#step-t0', 1.0),
+        offset: num('#step-offset', 0)
+    };
+}
+
+function buildSine() {
+    const discrete = bool('#sine-discrete', false);
+    const cmd = {
+        interruptor: 'on',
+        Type: 'Sine',
+        VCC: num('#sine-vcc', 12),
+        A: num('#sine-a', 3),
+        omega: num('#sine-omega', 6.283),
+        phi: num('#sine-phi', 0),
+        offset: num('#sine-offset', 0),
+        Discrete: discrete,
+        Continuous: !discrete
+    };
+    if (discrete) cmd.T = num('#sine-T', 0.01);
+    return cmd;
+}
+
+function buildPID() {
+    const discrete = bool('#pid-discrete', false);
+    const filt = bool('#pid-filt', false);
+    const cmd = {
+        interruptor: 'on',
+        Type: 'PID',
+        VCC: num('#pid-vcc', 12),
+        Kp: num('#pid-kp', 2),
+        Ki: num('#pid-ki', 5),
+        Kd: num('#pid-kd', 0.01),
+        des_speed: num('#pid-setpoint', 20),
+        filt: filt,
+        filtc: bool('#pid-filtc', false)
+    };
+    if (filt) cmd.omega0 = num('#pid-omega0', 50);
+    if (cmd.filtc) cmd.omega0c = num('#pid-omega0c', 50);
+    if (discrete) {
+        cmd.Discrete = true;
+        cmd.Continuous = false;
+        cmd.T = num('#pid-T', 0.01);
+        cmd.N = num('#pid-N', 100);
+    } else {
+        cmd.Discrete = false;
+        cmd.Continuous = true;
+    }
+    return cmd;
+}
+async function runBuilder(builder, label) {
+    if (!esp.connected) {
+        try { await esp.connect(); } catch (err) { log('connect failed: ' + err.message); return; }
+        if (!esp.connected) return;
+    }
+    const cmd = builder();
+    log(label + ' → ' + JSON.stringify(cmd));
+
+    // clear old curves before sending the new run
+    Object.values(plots).forEach(p => p.reset?.());   // reset() is optional
+
+    await esp.sendCommand(cmd);
+}
+
+
+
 //do we call upon this function when the user clicks the button again as in step and so on.
-function simulate_area(father, button_clicked=SAME_AS_LAST, state_clicked){
+function simulate_area(father, button_clicked = SAME_AS_LAST, state_clicked) {
 
     let sbg_sri;
 
-    if((window.sb_state == INITIATE) || (button_clicked == SAME_AS_LAST)){
+    if ((window.sb_state == INITIATE) || (button_clicked == SAME_AS_LAST)) {
         //we are in initiate:
         sbg_sri = creating_sidebar_group(father);
         sbg_sri.id = "sri_section_container";
@@ -1260,11 +1362,11 @@ function simulate_area(father, button_clicked=SAME_AS_LAST, state_clicked){
         button_clicked = window.sim_area;
 
 
-    }else{
-        //we are in a staet which the group still exists.
+    } else {
+        //we are in a state which the group still exists.
 
         //you clicked the same button u buffun
-        if(button_clicked == window.sim_area){
+        if (button_clicked == window.sim_area) {
             return 0;
         }
 
@@ -1283,135 +1385,194 @@ function simulate_area(father, button_clicked=SAME_AS_LAST, state_clicked){
 
     }
 
-    
+
     //if we are in initiate, we cant really change the visibility of the object
     //if we are on changing between buttons, then we can change it.
     //as long as the button is not same as last. we should be fine.
 
 
-    
-    
+
+
 
     //create area to select mode
     sim_real_identification(sbg_sri, button_clicked, state_clicked);
 
 
 
+
     
-    
-    
-    if(button_clicked == SIMULATED_CONTROL){
-        
+
+    if (button_clicked == SIMULATED_CONTROL) {
+
         //variable area depending on the button selected.
-        
+
         create_area_for_motor_parameters(sbg_sri);
-        
+
         //add a time input and a play simulation
-        const bf = sbf_basicform( "/communicationScript.py", "time", "Time:", "T", "number", 0.01, window.simulate_time , 7);
+        const bf = sbf_basicform("/communicationScript.py", "time", "Time:", "T", "number", 0.01, window.simulate_time, 7);
         sbg_sri.appendChild(bf);
 
-        
-    }else if(button_clicked == REAL_TIME_CONTROL){
-        
+
+    } else if (button_clicked == REAL_TIME_CONTROL) {
+
         const systemStatus = document.createElement("div");
         systemStatus.className = "sidebar_basic_elements system_status";
         systemStatus.id = "system_id";
-        
+
         systemStatus.style.marginTop = "5px";
         systemStatus.style.marginBottom = "5px";
         systemStatus.style.paddingTop = "12px";
         systemStatus.style.paddingBottom = "12px";
-        
-        
+
+
         const statusText = document.createElement("p");
+        statusText.id = "statusTextId";
         statusText.textContent = "  System Off";
 
         const consoleBox = document.createElement("div");
         consoleBox.innerHTML = `<esp32-console></esp32-console>`;
+        esp = consoleBox.querySelector('esp32-console');
 
 
-                
+
+
+
         const statusBox = document.createElement("div");
         statusBox.style.display = "flex"
         statusBox.innerHTML = icons["circle"];
-        
+
 
         statusBox.appendChild(statusText);
         systemStatus.appendChild(statusBox);
         sbg_sri.appendChild(systemStatus);
         sbg_sri.appendChild(consoleBox);
-        
-        const bf = sbf_basicform( "/communicationScript.py", "vcc", "Vcc:", " ", "number", 0.01, window.real_vcc, 10);
+
+        const bf = sbf_basicform("/communicationScript.py", "vcc", "Vcc:", " ", "number", 0.01, window.real_vcc, 10);
         sbg_sri.appendChild(bf);
-        
-        
-        
+
+        /* ---------- four plots, one per signal ---------- */
+        const PLOT_WINDOW = 300;   // samples kept on each chart
+
+        const plots = {
+            speed: new LivePlotter($('#plot_area_1'), 'Angular velocity (RPM)', PLOT_WINDOW),
+            voltage: new LivePlotter($('#plot_area_2'), 'Voltage (V)', PLOT_WINDOW),
+            current: new LivePlotter($('#plot_area_3'), 'Current (mA)', PLOT_WINDOW),
+            error: new LivePlotter($('#plot_area_4'), 'Error (rad/s)', PLOT_WINDOW)
+        };
+
+        /* ---------- fan out every sample to all four ---------- */
+        esp.addEventListener('sample', (e) => {
+            const { w, Vt, current, e: pidErr, time_s } = e.detail;
+
+            const x = time_s.toFixed(3);           // '12.345' — shared x-axis
+            const rpm = w * 60 / (2 * Math.PI);      // rad/s -> RPM
+
+            plots.speed.graphData(x, rpm);
+            plots.voltage.graphData(x, Vt);
+            plots.current.graphData(x, current);
+            plots.error.graphData(x, pidErr);
+
+        });
+
+
+
+
     }
-    // else if(button_clicked == SYSTEM_IDENTIFICATION){
-        
-    // }
-    
-    
-    
-    
-    
+
+
+
+
+
+
     //button below the inputs for each simulation
     const sri_button_container = document.createElement("div");
     sri_button_container.className = "pas_button_container";
-    
-    
+
+
     //creating buttons that we need for each window in particular
-    
-    startButton_sim = { id: "b_start_sim", icon: icons["play"]};
-    startButton_real = { id: "b_start_real", icon: icons["play"]};
-    startButton_identify = { id: "b_start_identify", icon: icons["play"]};
-    stopButton = { id: "b_stop", icon: icons["stop"]};
-    
-    
+
+    let startButton_sim = { id: "b_start_sim", icon: icons["play"] };
+    let startButton_real = { id: "b_start_real", icon: icons["play"] };
+    let startButton_identify = { id: "b_start_identify", icon: icons["play"] };
+    let stopButton = { id: "b_stop", icon: icons["stop"] };
+
+
     // loadButton = { id: "b_load", text: "Load" };
-    loadButton = { id: "b_load", icon: icons["load"]};
+    let loadButton = { id: "b_load", icon: icons["load"] };
     // saveButton = { id: "b_save", text: "Save" };
-    saveButton = { id: "b_save", icon: icons["save"]};
-    
-    
+    let saveButton = { id: "b_save", icon: icons["save"] };
+
+
     let sri_buttons = [];
-    
-    if(SIMULATED_CONTROL == button_clicked){
+
+    if (SIMULATED_CONTROL == button_clicked) {
         sri_buttons.push(startButton_sim);
         sri_buttons.push(saveButton);
-        
-    }else if(REAL_TIME_CONTROL== button_clicked){
+
+    } else if (REAL_TIME_CONTROL == button_clicked) {
         sri_buttons.push(startButton_real);
         sri_buttons.push(stopButton);
         sri_buttons.push(saveButton);
-        
-    }else if(SYSTEM_IDENTIFICATION== button_clicked){
+
+    } else if (SYSTEM_IDENTIFICATION == button_clicked) {
         sri_buttons.push(startButton_identify);
         sri_buttons.push(loadButton);
         sri_buttons.push(saveButton);
     }
-    
+
     sri_buttons.forEach(({ id, icon, iconClass, text }) => {
         const button = document.createElement("button");
         button.className = "pas_buttons";
         button.id = id;
-        
+
         if (icon) {
             button.insertAdjacentHTML("beforeend", icon);
         } else {
             button.textContent = text;
         }
-        
+
         //assining functions:
-        if(id == "b_start_sim"){
+        if (id == "b_start_sim") {
             button.addEventListener("click", () => window.on_play_simulation_button_js());
         }
-        if(id == "b_start_identify"){
+        else if (id == "b_start_identify") {
             button.addEventListener("click", () => get_last_predicted_values(sbg_sri));
         }
-        
+        else if (id == "b_start_real") {
+            if (state_clicked == STEP)
+                button.addEventListener("click", () => runBuilder(buildStep, 'STEP'));
+            else if (state_clicked == SINE)
+                button.addEventListener("click", () => runBuilder(buildSine, 'SINE'));
+            else if (state_clicked == PID)
+                button.addEventListener("click", () => runBuilder(buildPID, 'PID'));
+        }
+
+        if (id = "b_stop" && button_clicked == REAL_TIME_CONTROL) {
+            button.addEventListener('click', async () => {
+                if (!esp.connected) return;
+                await esp.sendCommand({ interruptor: 'off' });
+                log('STOP');
+            });
+        }
+
         sri_button_container.appendChild(button);
     });
+
+
+    if(button_clicked == REAL_TIME_CONTROL){
+        esp.addEventListener('connectionchange', (e) => {
+            const on = e.detail.connected;
+            document.querySelectorAll('.pas_buttons').forEach(sel => {
+                const b = $(sel); if (b) b.disabled = !on;
+            });
+        });
+    
+        // Disable command buttons until first connect
+        document.querySelectorAll('.pas_buttons').forEach(b => {
+            b.disabled = true;
+        });
+    }
+
 
     //create container where play and shi will go
     const sb_elements_3 = document.createElement('div');
@@ -1421,7 +1582,7 @@ function simulate_area(father, button_clicked=SAME_AS_LAST, state_clicked){
 
 
     // window.sim_area = change_sim_area_buttons_colors(button_clicked);
-    window.sim_area  = button_clicked;
+    window.sim_area = button_clicked;
 
 }
 
@@ -1433,7 +1594,7 @@ function simulate_area(father, button_clicked=SAME_AS_LAST, state_clicked){
 Exists to show the predictions of the motor parameters based on sine or step data
 (currently this is slightly limited functionality compared to the final functionality.)
 ---------------------------------------------------------------*/
-function get_last_predicted_values(father){
+function get_last_predicted_values(father) {
     //this is supposed to have complex logic on how to get previous gotten data that lives in the python file. 
     /*
     this is gonna be a dilemma because currently our libraries are in python.
@@ -1443,14 +1604,14 @@ function get_last_predicted_values(father){
     or have 2 assigned events. and js events awaits for python promise. i like this much more.
     */
 
-    
+
 
     const sbg = creating_sidebar_group(father);
     sbg.style.width = '270px';
     sbg.style.paddingLeft = '20px';
-    
 
-    if (window.identify_results){       
+
+    if (window.identify_results) {
         for (const [key, value] of Object.entries(JSON.parse(window.identify_results))) {
             const row = document.createElement('div');
             row.style.display = 'flex';
@@ -1491,18 +1652,18 @@ function change_to_sine(condis) {
     //info we need:
     const place = document.getElementById("sb_main");
 
-    
+
     //check if we are not there currently
     if (window.sb_state == SINE) {
         if (window.sb_condis == condis) {
             return 0;
         }
     }
-    
+
     //delete all from side bar
     //we arrive at sine and we want to save the previous data.
     clean_sidebar(place);
-    
+
 
     window.sb_condis = condis; //because they differ after this
 
@@ -1570,21 +1731,21 @@ function change_to_sine(condis) {
 
     //function sbf_basicform(action, for_d, label_text, Unitofmeasure, type, step) {
     //              missing adding id i believe? might not be needed
-    const bf = sbf_basicform( "/communicationScript.py", "amp", "Amplitude:", dictionaryUnitsOfMeasure["amp"], "number", 0.01, window.sine_con["amp"], 7);
+    const bf = sbf_basicform("/communicationScript.py", "amp", "Amplitude:", dictionaryUnitsOfMeasure["amp"], "number", 0.01, window.sine_con["amp"], 7);
     sbg2.appendChild(bf);
 
-    const freq = sbf_basicform( "/communicationScript.py", "freq", "Frequency:", dictionaryUnitsOfMeasure["omega"], "number", 0.01, window.sine_con["freq"]);
+    const freq = sbf_basicform("/communicationScript.py", "freq", "Frequency:", dictionaryUnitsOfMeasure["omega"], "number", 0.01, window.sine_con["freq"]);
     sbg2.appendChild(freq);
 
-    const phase_angle = sbf_basicform( "/communicationScript.py", "phase_angle", "Phase Angle:", dictionaryUnitsOfMeasure["phi"], "number", 0.01, window.sine_con["phase_angle"]);
+    const phase_angle = sbf_basicform("/communicationScript.py", "phase_angle", "Phase Angle:", dictionaryUnitsOfMeasure["phi"], "number", 0.01, window.sine_con["phase_angle"]);
     sbg2.appendChild(phase_angle);
 
-    const offset = sbf_basicform( "/communicationScript.py", "offset", "Offset:", dictionaryUnitsOfMeasure["delta"], "number", 0.01, window.sine_con["offset"]);
+    const offset = sbf_basicform("/communicationScript.py", "offset", "Offset:", dictionaryUnitsOfMeasure["delta"], "number", 0.01, window.sine_con["offset"]);
     sbg2.appendChild(offset);
 
 
     if (condis == DISCRETE) {
-        const offset = sbf_basicform( "/communicationScript.py", "period", "Period:", dictionaryUnitsOfMeasure["period"], "number", 0.01, window.sine_dis["period"] );
+        const offset = sbf_basicform("/communicationScript.py", "period", "Period:", dictionaryUnitsOfMeasure["period"], "number", 0.01, window.sine_dis["period"]);
         sbg2.appendChild(offset);
     }
 
@@ -1615,7 +1776,7 @@ function change_to_step() {
         return 0;
     }
 
-       //info we need:
+    //info we need:
     const place = document.getElementById("sb_main");
 
 
@@ -1624,7 +1785,7 @@ function change_to_step() {
 
     //creating sidebar
     const sbc = creating_sidebar_contents(place);
-    
+
     //create the simulate area (its gonna have to be renamed as it doesnt stand for that now)
     simulate_area(sbc, SAME_AS_LAST, STEP);
 
@@ -1650,13 +1811,13 @@ function change_to_step() {
 
 
     //3 inputs for step
-    const bf = sbf_basicform( "/communicationScript.py", "amp", "Amplitude:", dictionaryUnitsOfMeasure["amp"], "number", 0.01, window.step["amp"] );
+    const bf = sbf_basicform("/communicationScript.py", "amp", "Amplitude:", dictionaryUnitsOfMeasure["amp"], "number", 0.01, window.step["amp"]);
     sbg.appendChild(bf);
 
-    const freq = sbf_basicform( "/communicationScript.py", "it", "Initial Time:", dictionaryUnitsOfMeasure["timezero"], "number", 0.01, window.step["it"] );
+    const freq = sbf_basicform("/communicationScript.py", "it", "Initial Time:", dictionaryUnitsOfMeasure["timezero"], "number", 0.01, window.step["it"]);
     sbg.appendChild(freq);
 
-    const offset = sbf_basicform( "/communicationScript.py", "offset", "Offset:", dictionaryUnitsOfMeasure["delta"], "number", 0.01, window.step["offset"] );
+    const offset = sbf_basicform("/communicationScript.py", "offset", "Offset:", dictionaryUnitsOfMeasure["delta"], "number", 0.01, window.step["offset"]);
     sbg.appendChild(offset);
 
 
@@ -1668,14 +1829,14 @@ function change_to_step() {
     //slider duty box
     const sbg2 = creating_sidebar_group(sbc);
     sbg2.id = "CycleDutyBox";
-    if(window.sim_area != REAL_TIME_CONTROL)
+    if (window.sim_area != REAL_TIME_CONTROL)
         sbg2.style.display = "none"; //we start in simulated so we dont have to show this box
 
     sbg2.innerHTML = SliderDutyCycleHtml;
 
-    const sign = sbf_basicform( "/communicationScript.py", "sign", "Sign V(t):", dictionaryUnitsOfMeasure["none"], "number", 0.01);
+    const sign = sbf_basicform("/communicationScript.py", "sign", "Sign V(t):", dictionaryUnitsOfMeasure["none"], "number", 0.01);
     sbg2.appendChild(sign);
-    
+
     //this is needed. in fact im impressed this works. id think browser timings would mess this up:
     const SliderDutyCycle = document.getElementById("SliderDutyCycle");
     const UI_dutycycle = document.getElementById("UI_dutycycle");
@@ -1729,7 +1890,7 @@ function change_to_PID(condis) {
             return 0;
         }
     }
-    
+
     //delete all from side bar
     const place = document.getElementById("sb_main");
     clean_sidebar(place);
@@ -1801,7 +1962,7 @@ function change_to_PID(condis) {
         dictionaryUnitsOfMeasure[condis == CONTINUOUS ? "ts" : "ts_pid"],
         "number",
         0.01,
-        window.pid_con["ts"] 
+        window.pid_con["ts"]
     );
     sbg2.appendChild(bf);
 
@@ -1826,7 +1987,7 @@ function change_to_PID(condis) {
     //      a button saying digital filters
     //      a checkmark saying Filter coefficient (N)
 
-    
+
 
     if (condis == CONTINUOUS) {
         const sbf3 = document.createElement('div');
@@ -1849,9 +2010,9 @@ function change_to_PID(condis) {
         sbg2.appendChild(freq);
     }
 
-    
-    
-    
+
+
+
 
 
 
@@ -1949,7 +2110,7 @@ change_to_step();
 
 
 //show error and current
-function invertVisibility(item){
+function invertVisibility(item) {
     if (item.style.display === "none") {
         item.style.display = "block";
     } else {
@@ -1963,13 +2124,13 @@ function invertVisibility(item){
 // const CURRENT_AND_ERROR = 1;
 
 //we expect a 1 or a 0
-function change_graphs(button_clicked){
+function change_graphs(button_clicked) {
     let count = 1;
-    if(graphs_state == button_clicked){
+    if (graphs_state == button_clicked) {
         return 0;
     }
 
-   //change the graphs visivility
+    //change the graphs visivility
     const div1 = document.getElementById("id_graph_container_1");
     const div2 = document.getElementById("id_graph_container_2");
     const div3 = document.getElementById("id_graph_container_3");
@@ -1984,12 +2145,12 @@ function change_graphs(button_clicked){
     let btn1 = document.getElementById("b_speed_and_voltage");
     let btn2 = document.getElementById("b_current_and_error");
 
-    if(button_clicked == SPEED_AND_VOLTAGE){
+    if (button_clicked == SPEED_AND_VOLTAGE) {
         let temp = btn2;
         btn2 = btn1;
         btn1 = temp;
     }
-    
+
 
     btn1.classList.add("nav_button");
     btn1.classList.remove("nav_button_selected");
@@ -2023,6 +2184,7 @@ button_speed_voltage.addEventListener("click", () => {
 
 // at the end lets add the dom for the python scrpt
 //so we fullfill python promise:
+
 
 window.resolveJsReady();
 

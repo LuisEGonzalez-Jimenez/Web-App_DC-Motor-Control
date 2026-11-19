@@ -19,6 +19,7 @@ class ESP32Console extends HTMLElement {
     this._onDisconnectClick = () => this.disconnect();
     this._onGattDisconnect  = () => this.handleDeviceUnplug();
     this._onNotify          = (e) => this.handleNotification(e);
+    this._sendChain = Promise.resolve();   // serialize concurrent sends
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -35,7 +36,6 @@ class ESP32Console extends HTMLElement {
       <h2>ESP32 BLE Monitor</h2>
       <button id="connectBtn">Connect</button>
       <button id="disconnectBtn" disabled>Disconnect</button>
-      <span id="status">disconnected</span>
       <div id="realtime_console"></div>
     `;
   }
@@ -73,19 +73,21 @@ class ESP32Console extends HTMLElement {
     }
     const text  = (typeof cmd === 'string') ? cmd : JSON.stringify(cmd);
     const bytes = new TextEncoder().encode(text + '\n');
-    const CHUNK = 20; // MTU 23 - 3 header
-
-    try {
-      for (let i = 0; i < bytes.length; i += CHUNK) {
-        // Acknowledged writes: guarantees order, no dropped chunks
-        await this.rxCharacteristic.writeValue(bytes.slice(i, i + CHUNK));
+    const CHUNK = 20;
+    const run = async () => {
+      try {
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          await this.rxCharacteristic.writeValue(bytes.slice(i, i + CHUNK));
+        }
+        this.log('>> ' + text);
+        return true;
+      } catch (err) {
+        this.log('[WRITE ERROR] ' + err.message);
+        return false;
       }
-      this.log('>> ' + text);
-      return true;
-    } catch (err) {
-      this.log('[WRITE ERROR] ' + err.message);
-      return false;
-    }
+    };
+    this._sendChain = this._sendChain.then(run, run);
+    return this._sendChain
   }
 
   /* ---------- lifecycle ---------- */
@@ -95,11 +97,6 @@ class ESP32Console extends HTMLElement {
     this.disconnectBtn = this.shadowRoot.getElementById('disconnectBtn');
     this.outputDiv     = this.shadowRoot.getElementById('realtime_console');
     this.statusSpan    = this.shadowRoot.getElementById('status');
-
-    const plotContainer = document.getElementById('plot_area_1');
-    if (plotContainer) {
-      this.plotter = new LivePlotter(plotContainer, 'Motor RPM', 100);
-    }
 
     this.connectBtn.addEventListener('click', this._onConnectClick);
     this.disconnectBtn.addEventListener('click', this._onDisconnectClick);
@@ -222,15 +219,6 @@ class ESP32Console extends HTMLElement {
       const sample = this._parseSample(line);
       if (!sample) continue;
 
-      if (this.plotter) {
-        // w is rad/s; convert to RPM for the plotter
-        const rpm = sample.w * 60 / (2 * Math.PI);
-        const ts  = new Date().toLocaleTimeString([], {
-          hour12: false, minute: '2-digit', second: '2-digit'
-        });
-        this.plotter.graphData(ts, rpm);
-      }
-
       this.dispatchEvent(new CustomEvent('sample', { detail: sample }));
     }
   }
@@ -251,9 +239,21 @@ class ESP32Console extends HTMLElement {
   }
 
   _setStatus(text, color) {
-    if (!this.statusSpan) return;
-    this.statusSpan.textContent = text;
-    this.statusSpan.style.color = color;
+    if (this.statusSpan) {
+      this.statusSpan.textContent = text;
+      this.statusSpan.style.color = color;
+    }
+
+    // Update external status circle & text in the main DOM
+    const svgPath = document.getElementById('statusCircleId');
+    if (svgPath) {
+      svgPath.setAttribute('fill', color); // 'green' on connect, 'red' on disconnect
+    }
+
+    const statusText = document.getElementById('statusTextId');
+    if (statusText) {
+      statusText.textContent = (text === 'connected') ? '  System On' : '  System Off';
+    }
   }
 }
 

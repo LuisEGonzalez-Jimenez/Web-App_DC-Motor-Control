@@ -31,6 +31,7 @@ DISCRETE = 1
 
 async def main():
     #lets wait until the promes gets returned.
+    print("lets wait for promise")
     promise = js.jsReadyPromise
     await promise
 
