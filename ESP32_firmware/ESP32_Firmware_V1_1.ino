@@ -1,21 +1,15 @@
 /*
 ==============================================================
-Pedagogical DC Motor Control Platform - ESP32 Firmware V1.1
+Pedagogical DC Motor Control Platform - ESP32 Firmware V1.2
 Authors: Luis Ricardo Rivera-Goitia, Luis Enrique González-Jiménez
 ITESO – Universidad Jesuita de Guadalajara
 Requires: esp32 by Espressif Systems 3.x (tested with 3.1.3)
 --------------------------------------------------------------
-*/
-
-/*
+V1.2 – Added BLE (Nordic UART Service) transport for the Web
+       Bluetooth client. Uses the SAME JSON command schema and
+       the SAME 8-column CSV output as MQTT/TCP.
 ==============================================================
-Original code comes from:
-https://github.com/LuisEGonzalez-Jimenez/Pedagogical-DC-Motor-Prototype/blob/main/ESP32_Firmware/ESP32_Firmware_V1_1/ESP32_Firmware_V1_1.ino
-
-This code adds modifications to enable bluetooth communication with this webpage.
---------------------------------------------------------------
 */
-
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -27,17 +21,11 @@ This code adds modifications to enable bluetooth communication with this webpage
 #include "esp_timer.h"
 #include <Wire.h>
 
+// === BLE ===
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
-
-
-
-#define SERVICE_UUID           "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
-#define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
-#define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
-
 
 // INA219 configuration (register 0x00), same as the Adafruit library's
 // (32 V, PGA /8 = 320 mV, 12-bit bus, continuous) but with averaged
@@ -58,10 +46,6 @@ This code adds modifications to enable bluetooth communication with this webpage
 
 // ==========================================================
 // USER SETTINGS: replace with your own data before uploading
-//   ssid / password        : WiFi network the ESP32 joins in MQTT mode
-//                            (it must be a 2.4 GHz network)
-//   mqttServer             : MQTT broker (HiveMQ Cloud cluster URL)
-//   mqttUserName / mqttPwd : broker credentials (same as in the MATLAB GUI)
 // ==========================================================
 const char* ssid         = "YOUR_WIFI_SSID";
 const char* password     = "YOUR_WIFI_PASSWORD";
@@ -89,6 +73,20 @@ bool isTCPClientConnected = false;
 
 // Current Sensor
 Adafruit_INA219 ina219;
+
+// === BLE ===
+// Nordic UART Service UUIDs – must match the JS client exactly.
+#define BLE_SERVICE_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+#define BLE_RX_UUID      "6e400002-b5a3-f393-e0a9-e50e24dcca9e"   // browser -> ESP32 (write)
+#define BLE_TX_UUID      "6e400003-b5a3-f393-e0a9-e50e24dcca9e"   // ESP32 -> browser (notify)
+
+BLEServer*         pServer  = nullptr;
+BLECharacteristic* pRxChar  = nullptr;   // receives commands
+BLECharacteristic* pTxChar  = nullptr;   // streams samples
+bool               bleConnected     = false;
+bool               bleInitialized   = false;
+uint16_t           bleConnId        = 0xFFFF;
+String             bleRxBuffer      = "";   // accumulate until '\n'
 
 // Certificate (ISRG Root X1)
 static const char *root_ca PROGMEM = R"EOF(
@@ -130,17 +128,16 @@ const float pi = 3.14159265358979323846;
 // ==========================================================
 // Pins
 // ==========================================================
-const int PWMA = 13;            // Pulse Width Modulation A
-const int AIN2 = 12, AIN1 = 14; // motor inputs
-const int STBY = 27;            // Activate the controller
+const int PWMA = 13;
+const int AIN2 = 12, AIN1 = 14;
+const int STBY = 27;
 
 #define ENC_A 34
 #define ENC_B 35
-#define ENC_PPR 11              // pulses per motor revolution (rising edge, phase A)
-#define GEAR_BOX 44.4f          // measured (datasheet: 49)
-#define ENC_TIMEOUT_US 50000UL  // no pulses in 50 ms -> speed = 0
-#define ENC_MIN_PULSE_US 100UL  // pulses less than 100 us after the previous one are ignored
-                                //     (at 12 V the real interval is ~880 us)
+#define ENC_PPR 11
+#define GEAR_BOX 44.4f
+#define ENC_TIMEOUT_US 50000UL
+#define ENC_MIN_PULSE_US 100UL
 
 // ==========================================================
 // Encoder (variables shared with the ISR)
@@ -149,23 +146,21 @@ volatile unsigned long t = 0;
 volatile unsigned long t_m = 0;
 volatile int signo = 1;
 volatile int pos_i = 0;
-volatile uint32_t pulseCount = 0;   // total rising edges received
+volatile uint32_t pulseCount = 0;
 portMUX_TYPE encMux = portMUX_INITIALIZER_UNLOCKED;
 
-#define PWM_FREQ_HZ 20000           // motor PWM frequency
+#define PWM_FREQ_HZ 20000
 
 // ==========================================================
 // Experiment parameters
-// The MQTT/TCP callback writes them into "sharedP" and the control
-// task copies them into "P" at the start of its next cycle.
 // ==========================================================
 enum Mode { MODE_NONE = 0, MODE_STEP, MODE_SINE, MODE_PID };
 
 struct Params {
   bool  on;
   Mode  mode;
-  float VCC, A, t0, offset;          // Step
-  float omega, phi;                  // Sine (offset and A shared)
+  float VCC, A, t0, offset;
+  float omega, phi;
   bool  Continuous, Discrete;
   float T, N;
   double Kp, Ki, Kd;
@@ -174,33 +169,31 @@ struct Params {
   bool  filt, filtc;
 };
 
-Params sharedP = {};          // written by the callback
-Params P = {};                // used by the control task
-volatile uint32_t cmdSeq = 0; // incremented with each new command
+Params sharedP = {};
+Params P = {};
+volatile uint32_t cmdSeq = 0;
 portMUX_TYPE paramMux = portMUX_INITIALIZER_UNLOCKED;
 
 // ==========================================================
 // Sample queue (control task -> loop)
 // ==========================================================
 struct Sample {
-  float  current;       // mA
-  float  w;             // rad/s
-  double time_s;        // real time since start
-  float  Vt;            // V
+  float  current;
+  float  w;
+  double time_s;
+  float  Vt;
   float  w_filt;
   float  current_filt;
-  int    duty;          // %
+  int    duty;
   float  e;
 };
 
-// State of a low-pass filter (defined here, before any function, so that
-// the Arduino IDE can generate the prototype of lowPass())
 struct LowPass { float xk1 = 0, yk1 = 0; };
 
 QueueHandle_t sampleQueue;
-#define SAMPLE_QUEUE_LEN 400        // 2 s of samples at 5 ms
-#define SEND_INTERVAL_MS 50         // one message every 50 ms
-#define MAX_SAMPLES_PER_MSG 20      // 20 lines x ~55 B = ~1.1 kB
+#define SAMPLE_QUEUE_LEN 400
+#define SEND_INTERVAL_MS 50
+#define MAX_SAMPLES_PER_MSG 20
 #define MQTT_BUFFER_SIZE 2048
 
 // ==========================================================
@@ -219,6 +212,7 @@ void showMqttMenu();
 void showWiFiMenu();
 void startMQTTBroker();
 void startHotspot();
+void startBluetooth();      // === BLE ===
 bool setup_wifi();
 void reconnect();
 void callback(char* topic, byte* payload, unsigned int length);
@@ -230,11 +224,12 @@ void resetSpeedEstimator();
 void controlTask(void* pv);
 void onControlTimer(void* arg);
 void sendPendingSamples();
+void sendBleBatch(const String& batch);   // === BLE ===
 
 // Writes the INA219 configuration register
 void ina219SetAveraging() {
   Wire.beginTransmission(INA219_ADDR);
-  Wire.write(0x00);                               // configuration register
+  Wire.write(0x00);
   Wire.write((uint8_t)(INA219_CONFIG_AVG8 >> 8));
   Wire.write((uint8_t)(INA219_CONFIG_AVG8 & 0xFF));
   Wire.endTransmission();
@@ -245,7 +240,7 @@ void ina219SetAveraging() {
 // ==========================================================
 void setup() {
 #if DEBUG
-  Serial.begin(921600);   // with DEBUG all samples are sent: higher speed is needed
+  Serial.begin(921600);
 #else
   Serial.begin(115200);
 #endif
@@ -255,10 +250,10 @@ void setup() {
   showMainMenu();
 
   ina219.begin();
-  ina219SetAveraging();       // average of 8 conversions
+  ina219SetAveraging();
   ina219.getCurrent_mA();
 
-  pinMode(ENC_A, INPUT);   // GPIO34/35 have no internal pull-up
+  pinMode(ENC_A, INPUT);
   pinMode(ENC_B, INPUT);
   pinMode(PWMA, OUTPUT);
   pinMode(AIN2, OUTPUT);
@@ -268,18 +263,15 @@ void setup() {
   digitalWrite(STBY, HIGH);
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, LOW);
-  analogWriteFrequency(PWMA, PWM_FREQ_HZ);   // 20 kHz (esp32 3.x API)
+  analogWriteFrequency(PWMA, PWM_FREQ_HZ);
   analogWrite(PWMA, 0);
 
   attachInterrupt(digitalPinToInterrupt(ENC_A), readEncoder, RISING);
 
-  // Sample queue
   sampleQueue = xQueueCreate(SAMPLE_QUEUE_LEN, sizeof(Sample));
 
-  // Control task on core 1, higher priority than loop()
   xTaskCreatePinnedToCore(controlTask, "control", 8192, NULL, 3, &controlTaskHandle, 1);
 
-  // Hardware timer that wakes up the control task
   esp_timer_create_args_t args = {};
   args.callback = &onControlTimer;
   args.name = "ctrl";
@@ -288,11 +280,9 @@ void setup() {
 }
 
 // ==========================================================
-// LOOP: screen, communications and data sending
-// (the control NO longer runs here)
+// LOOP
 // ==========================================================
 void loop() {
-  // Touch screen input
   uint16_t raw_x, raw_y;
   if (tft.getTouch(&raw_x, &raw_y)) {
     uint16_t x = map(raw_y, 240, 0, 0, 320);
@@ -342,10 +332,9 @@ void loop() {
     }
   }
 
-  // Send the accumulated samples
   sendPendingSamples();
 
-  delay(1);   // yields the processor to other tasks
+  delay(1);
 }
 
 // ==========================================================
@@ -358,6 +347,7 @@ void sendPendingSamples() {
 
   bool mqttOK = (currentScreen == 3 && client.connected());
   bool tcpOK  = (tcpClient && tcpClient.connected());
+  bool bleOK  = (bleConnected && pTxChar != nullptr);   // === BLE ===
 
   Sample s;
   while (uxQueueMessagesWaiting(sampleQueue) > 0) {
@@ -375,14 +365,77 @@ void sendPendingSamples() {
 
     if (mqttOK) client.publish(topic2, batch.c_str());
     if (tcpOK)  tcpClient.print(batch);
+    if (bleOK)  sendBleBatch(batch);                     // === BLE ===
 #if DEBUG
     Serial.print(batch);
 #endif
   }
 }
 
+// === BLE ===
+// Streams a CSV batch to the browser over the TX characteristic.
+// Chunks at 180 B (safe under the negotiated MTU; the JS _lineBuffer
+// reassembles lines transparently regardless of chunk boundaries).
+void sendBleBatch(const String& batch) {
+  if (!pTxChar) return;
+  const size_t maxChunk = 180;
+  const size_t len      = batch.length();
+  const char*  data     = batch.c_str();
+  size_t off = 0;
+  while (off < len) {
+    size_t n = (len - off < maxChunk) ? (len - off) : maxChunk;
+    pTxChar->setValue((uint8_t*)(data + off), n);
+    if (!pTxChar->notify()) break;   // subscriber gone; stop this batch
+    off += n;
+  }
+}
+
+// === BLE ===
+// Server-side connection lifecycle.
+class ServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer* srv, esp_ble_gatts_cb_param_t* param) override {
+    if (param) bleConnId = param->connect.conn_id;
+    bleConnected = true;
+    bleRxBuffer  = "";
+    DBG("BLE client connected");
+  }
+  void onDisconnect(BLEServer* srv) override {
+    bleConnected = false;
+    bleConnId    = 0xFFFF;
+    bleRxBuffer  = "";
+    if (currentScreen == 6) {
+      // Re-advertise so the browser can reconnect without re-pairing
+      BLEDevice::startAdvertising();
+    }
+    DBG("BLE client disconnected");
+  }
+};
+
+// === BLE ===
+// Characteristic write handler: buffer bytes, parse one command per line.
+// The JS client chunks JSON at 20 B and appends '\n', so we must reassemble
+// across multiple onWrite callbacks before calling parseCommand().
+class RxCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* ch) override {
+    std::string value = ch->getValue();
+    if (value.empty()) return;
+
+    for (char c : value) {
+      if (c == '\n' || c == '\r') {
+        if (bleRxBuffer.length() > 0) {
+          parseCommand(bleRxBuffer.c_str(), bleRxBuffer.length());
+          bleRxBuffer = "";
+        }
+      } else {
+        bleRxBuffer += c;
+        if (bleRxBuffer.length() > 1024) bleRxBuffer = "";  // safety
+      }
+    }
+  }
+};
+
 // ==========================================================
-// Communications: WiFi / MQTT / TCP / screen
+// Communications: WiFi / MQTT / TCP / BLE / screen
 // ==========================================================
 bool setup_wifi() {
   WiFi.mode(WIFI_STA);
@@ -433,6 +486,9 @@ void reconnect() {
   currentScreen = 5;
 }
 
+// ==========================================================
+// Main menu – three buttons now
+// ==========================================================
 void showMainMenu() {
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(TFT_WHITE);
@@ -440,26 +496,40 @@ void showMainMenu() {
   tft.setCursor(20, 10);
   tft.println("Motor Control Interface");
 
-  tft.fillRect(60, 50, 210, 60, TFT_BLUE);
-  tft.setCursor(75, 72);
+  tft.fillRect(60, 40, 210, 50, TFT_BLUE);
+  tft.setCursor(75, 56);
   tft.println("1: MQTT Broker");
 
-  tft.fillRect(60, 130, 210, 60, TFT_RED);
-  tft.setCursor(75, 150);
+  tft.fillRect(60, 105, 210, 50, TFT_RED);
+  tft.setCursor(75, 121);
   tft.println("2: WiFi Computer");
+
+  tft.fillRect(60, 170, 210, 50, TFT_GREEN);
+  tft.setCursor(75, 186);
+  tft.println("3: Bluetooth BLE");
+
   currentScreen = 0;
 }
 
 void handleTouch(int x, int y) {
   if (currentScreen == 0) {
-    if (x > 60 && x < 260 && y > 50 && y < 110) showMqttMenu();
-    else if (x > 60 && x < 260 && y > 130 && y < 190) showWiFiMenu();
+    if      (x > 60 && x < 270 && y > 40  && y < 90)  showMqttMenu();
+    else if (x > 60 && x < 270 && y > 105 && y < 155) showWiFiMenu();
+    else if (x > 60 && x < 270 && y > 170 && y < 220) startBluetooth();   // === BLE ===
   } else if ((currentScreen == 1 || currentScreen == 2) && x > 30 && x < 250) {
     if (y > 60 && y < 110) (currentScreen == 1) ? startMQTTBroker() : startHotspot();
     else if (y > 140 && y < 190) showMainMenu();
-  } else if ((currentScreen == 3 || currentScreen == 4 || currentScreen == 5) && x > 30 && x < 290 && y > 190 && y < 230) {
+  } else if ((currentScreen == 3 || currentScreen == 4 || currentScreen == 5 || currentScreen == 6) &&
+             x > 30 && x < 290 && y > 190 && y < 230) {
     client.disconnect();
     WiFi.disconnect(true);
+    // === BLE ===
+    if (bleConnected && pServer && bleConnId != 0xFFFF) {
+      pServer->disconnect(bleConnId);
+    }
+    if (bleInitialized) {
+      BLEDevice::getAdvertising()->stop();
+    }
     showMainMenu();
   }
 }
@@ -524,7 +594,7 @@ void startMQTTBroker() {
   }
   espClient.setCACert(root_ca);
   client.setServer(mqttServer, mqttPort);
-  client.setBufferSize(MQTT_BUFFER_SIZE);   // several samples per message
+  client.setBufferSize(MQTT_BUFFER_SIZE);
   client.setCallback(callback);
   reconnect();
 }
@@ -557,14 +627,68 @@ void startHotspot() {
   currentScreen = 4;
 }
 
+// === BLE ===
+// Creates (once) and starts the BLE peripheral.
+// Idempotent: calling again just re-starts advertising.
+void startBluetooth() {
+  if (!bleInitialized) {
+    BLEDevice::init("ESP32-MotorBLE");   // name starts with "ESP32" (browser filter)
+    BLEDevice::setMTU(247);              // request a large MTU for faster streaming
+
+    pServer = BLEDevice::createServer();
+    pServer->setCallbacks(new ServerCallbacks());
+
+    BLEService* pService = pServer->createService(BLE_SERVICE_UUID);
+
+    pRxChar = pService->createCharacteristic(
+      BLE_RX_UUID,
+      BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR
+    );
+    pRxChar->setCallbacks(new RxCallbacks());
+
+    pTxChar = pService->createCharacteristic(
+      BLE_TX_UUID,
+      BLECharacteristic::PROPERTY_NOTIFY
+    );
+    pTxChar->addDescriptor(new BLE2902());
+
+    pService->start();
+
+    BLEAdvertising* pAdv = BLEDevice::getAdvertising();
+    pAdv->addServiceUUID(BLE_SERVICE_UUID);
+    pAdv->setScanResponse(true);
+    pAdv->setMinPreferred(0x06);         // 7.5 ms
+
+    bleInitialized = true;
+  }
+
+  BLEDevice::startAdvertising();
+
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_GREEN);
+  tft.setTextSize(2);
+  tft.setCursor(20, 40);
+  tft.println("BLE Mode Active");
+  tft.setCursor(20, 90);
+  tft.setTextColor(TFT_WHITE);
+  tft.println("Name: ESP32-MotorBLE");
+  tft.setCursor(20, 130);
+  tft.println("Waiting for host...");
+  tft.fillRect(30, 190, 260, 40, TFT_RED);
+  tft.setCursor(50, 200);
+  tft.setTextColor(TFT_WHITE);
+  tft.println("Go back to Main Menu");
+
+  currentScreen = 6;
+}
+
 // ==========================================================
-// JSON commands (MQTT and TCP use the same function)
+// JSON commands (MQTT, TCP, and BLE all funnel through here)
 // ==========================================================
 void callback(char* topic, byte* payload, unsigned int length) {
   parseCommand((const char*)payload, length);
 }
 
-// Accepts true/false or 1/0 (MATLAB may send either)
 bool jsonBool(JsonVariantConst v, bool def) {
   if (v.isNull())     return def;
   if (v.is<bool>())   return v.as<bool>();
@@ -581,7 +705,7 @@ void parseCommand(const char* json, size_t len) {
 
   Params np;
   portENTER_CRITICAL(&paramMux);
-  np = sharedP;                       // starts from the current values
+  np = sharedP;
   portEXIT_CRITICAL(&paramMux);
 
   if (strcmp(interruptor, "off") == 0) {
@@ -632,7 +756,7 @@ void IRAM_ATTR readEncoder() {
   int val = digitalRead(ENC_B);
 
   portENTER_CRITICAL_ISR(&encMux);
-  if (t != 0 && (now - t) < ENC_MIN_PULSE_US) {   // false pulse (noise): ignored
+  if (t != 0 && (now - t) < ENC_MIN_PULSE_US) {
     portEXIT_CRITICAL_ISR(&encMux);
     return;
   }
@@ -644,12 +768,11 @@ void IRAM_ATTR readEncoder() {
   portEXIT_CRITICAL_ISR(&encMux);
 }
 
-// Speed estimator state (used only by the control task)
-uint32_t      spdPrevCount = 0;     // accumulated pulses at the previous sample
-unsigned long spdPrevLast  = 0;     // time of the last pulse at the previous sample
+uint32_t      spdPrevCount = 0;
+unsigned long spdPrevLast  = 0;
 bool          spdValid     = false;
-int           spdPrevPos   = 0;     // position (signed pulses) at the previous sample
-int           spdDir       = 1;     // last confirmed direction of rotation
+int           spdPrevPos   = 0;
+int           spdDir       = 1;
 
 void resetSpeedEstimator() {
   portENTER_CRITICAL(&encMux);
@@ -661,10 +784,8 @@ void resetSpeedEstimator() {
   spdValid = false;
 }
 
-// Wheel speed (rad/s), averaged over all pulses received
-// since the previous sample. 0 if the motor is stopped.
 float computeSpeed() {
-  static bool spdFlipPending = false;   // direction change pending confirmation
+  static bool spdFlipPending = false;
   unsigned long t_now, t_prev;
   uint32_t count;
   int s, pos;
@@ -677,7 +798,6 @@ float computeSpeed() {
   pos = pos_i;
   portEXIT_CRITICAL(&encMux);
 
-  // No recent pulses: stopped
   if (t_now == 0 || (micros() - t_now) > ENC_TIMEOUT_US) {
     spdPrevCount = count;
     spdPrevLast = t_now;
@@ -690,9 +810,6 @@ float computeSpeed() {
 
   uint32_t dN = count - spdPrevCount;
 
-  // Direction of rotation from the net pulse balance over the period (not from
-  // a single pulse). A direction change is accepted if indicated by 2 or more net
-  // pulses, or if it repeats in two consecutive periods.
   if (dN > 0) {
     int dPos = pos - spdPrevPos;
     int newDir = (dPos > 0) ? 1 : ((dPos < 0) ? -1 : spdDir);
@@ -711,10 +828,8 @@ float computeSpeed() {
   float period_us = 0.0f;
 
   if (dN > 0 && spdValid) {
-    // dN complete intervals between the previous last pulse and the current one
     period_us = (float)(t_now - spdPrevLast) / (float)dN;
   } else if (spdValid && t_prev != 0 && t_now != t_prev && (t_now - t_prev) <= ENC_TIMEOUT_US) {
-    // No new pulse (low speed) or first sample: last interval
     period_us = (float)(t_now - t_prev);
   }
 
@@ -747,11 +862,10 @@ void setMotor(int duty, int pwmValue) {
   }
 }
 
-// Converts a voltage into a duty cycle and applies it. Returns the duty (%).
 int applyVoltage(float V, float VCC) {
   int duty = 0;
-  if (VCC > 0.0f) duty = (int)((V / VCC) * 100.0f);   // no division by zero
-  duty = constrain(duty, -100, 100);                  // limited to +/-100 %
+  if (VCC > 0.0f) duty = (int)((V / VCC) * 100.0f);
+  duty = constrain(duty, -100, 100);
   int pwmValue = abs(map(duty, -100, 100, -255, 255));
   setMotor(duty, pwmValue);
   return duty;
@@ -796,13 +910,12 @@ void controlTask(void* pv) {
 
   unsigned long t_start_us = 0, prev_us = 0;
   float integral = 0, prev_e = 0, prev_derivative = 0;
-  bool  pidFirst = true;                 // first PID sample after a start
+  bool  pidFirst = true;
   LowPass fSpeed, fCurrent;
 
   for (;;) {
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);   // waits for the next period
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-    // ---------- New command ----------
     uint32_t seq;
     portENTER_CRITICAL(&paramMux);
     seq = cmdSeq;
@@ -812,7 +925,7 @@ void controlTask(void* pv) {
     if (seq != appliedSeq) {
       appliedSeq = seq;
 
-      if (!P.on) {                               // ----- OFF -----
+      if (!P.on) {
         running = false;
         runMode = MODE_NONE;
         applyVoltage(0.0f, 1.0f);
@@ -820,18 +933,16 @@ void controlTask(void* pv) {
         continue;
       }
 
-      // Period: discrete (Sine/PID) uses T; everything else, 5 ms
       bool discreto = (P.Discrete && (P.mode == MODE_SINE || P.mode == MODE_PID));
       float Tsec = (P.T < 0.005f) ? 0.005f : P.T;
       setControlPeriod(discreto ? (uint32_t)(Tsec * 1.0e6f) : 5000);
 
-      // Same mode and already running: only update parameters
       if (!(running && P.mode == runMode)) {
         running = true;
         runMode = P.mode;
         t_start_us = micros();
         resetSpeedEstimator();
-        prev_us = t_start_us - ctrlPeriod_us;  // first dt = nominal period (not ~0)
+        prev_us = t_start_us - ctrlPeriod_us;
         integral = prev_e = prev_derivative = 0;
         pidFirst = true;
         fSpeed = LowPass();
@@ -842,7 +953,6 @@ void controlTask(void* pv) {
 
     if (!running) continue;
 
-    // ---------- Time ----------
     unsigned long now = micros();
     float Ts_nom = ctrlPeriod_us / 1.0e6f;
     float dt = (now - prev_us) / 1.0e6f;
@@ -850,19 +960,16 @@ void controlTask(void* pv) {
     if (dt <= 0.0f || dt > 2.0f * Ts_nom) dt = Ts_nom;
     double t_rel = (now - t_start_us) / 1.0e6;
 
-    // Time step for filters and PID: real (continuous) or T (discrete)
     float Ts = P.Discrete ? Ts_nom : dt;
 
-    // ---------- Measurements ----------
     float current = ina219.getCurrent_mA();
     float w = computeSpeed();
     float current_f = P.filtc ? lowPass(fCurrent, current, Ts, P.omega0c) : 0.0f;
     float w_f       = P.filt  ? lowPass(fSpeed,   w,       Ts, P.omega0)  : 0.0f;
 
     float Vt = 0.0f, e = 0.0f;
-    float Vreport;     // value sent to the GUI
+    float Vreport;
 
-    // ---------- Control law ----------
     if (runMode == MODE_STEP) {
       Vt = (t_rel < P.t0) ? P.offset : P.A + P.offset;
 
@@ -874,15 +981,15 @@ void controlTask(void* pv) {
     } else if (runMode == MODE_PID) {
       float w_used = P.filt ? w_f : w;
       e = P.des_speed - w_used;
-      if (pidFirst) {                       // e(k-1) does not exist yet:
-        prev_e = e;                         // no derivative kick at start
+      if (pidFirst) {
+        prev_e = e;
         pidFirst = false;
       }
 
       float proportional = P.Kp * e;
 
       float derivative;
-      if (P.Discrete && P.N > 0) {          // derivative filter with coefficient N
+      if (P.Discrete && P.N > 0) {
         derivative = P.Kd * P.N * (e - prev_e) + prev_derivative * (1.0f - Ts * P.N);
       } else {
         derivative = (P.Kd / Ts) * (e - prev_e);
@@ -891,25 +998,22 @@ void controlTask(void* pv) {
       float integral_candidate = integral + e * Ts * P.Ki;
       float Vk_unsat = proportional + integral_candidate + derivative;
 
-      // Basic anti-windup (conditional integration)
       bool allowIntegration = (Vk_unsat <= 12.0f && Vk_unsat >= -12.0f) ||
                               (Vk_unsat > 12.0f && e < 0) ||
                               (Vk_unsat < -12.0f && e > 0);
       if (allowIntegration) integral = integral_candidate;
 
-      float u = proportional + integral + derivative;   // unsaturated PID output
-      Vt = constrain(u, -12.0f, 12.0f);                 // voltage applied to the motor
+      float u = proportional + integral + derivative;
+      Vt = constrain(u, -12.0f, 12.0f);
       Vreport = u;
 
       prev_e = e;
       prev_derivative = derivative;
-
     }
 
-    if (runMode != MODE_PID) Vreport = Vt;              // Step/Sine: applied voltage
+    if (runMode != MODE_PID) Vreport = Vt;
     int duty = applyVoltage(Vt, P.VCC);
 
-    // ---------- Store sample ----------
     Sample s;
     s.current = current;
     s.w = w;
@@ -919,6 +1023,6 @@ void controlTask(void* pv) {
     s.current_filt = current_f;
     s.duty = duty;
     s.e = e;
-    xQueueSend(sampleQueue, &s, 0);   // if the queue is full, it is discarded
+    xQueueSend(sampleQueue, &s, 0);
   }
 }
