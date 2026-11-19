@@ -482,28 +482,28 @@ dictionaryFormulas["derivative_term_dis"] = `
 //declaring units of measure. cause dom prob shoudnt be used for this
 let dictionaryUnitsOfMeasure = {};
 dictionaryUnitsOfMeasure["amp"] = `
-    <math><mi>A</mi></math>
+    <math style="margin-top:3.5px;"><mi>A</mi></math>
 `;
 dictionaryUnitsOfMeasure["timezero"] = `
-    <math><msub><mi>t</mi><mn>0</mn></msub></math>
+    <math style="margin-top:3.5px;"><msub><mi>t</mi><mn>0</mn></msub></math>
 `;
 dictionaryUnitsOfMeasure["delta"] = `
-    <math><mi>&Delta;</mi></math>
+    <math style="margin-top:3.5px;"><mi>&Delta;</mi></math>
 `;
 dictionaryUnitsOfMeasure["omega"] = `
-    <math><mi>&omega;</mi></math>
+    <math style="margin-top:3.5px;"><mi>&omega;</mi></math>
 `;
 dictionaryUnitsOfMeasure["phi"] = `
-    <math><mi>&phi;</mi></math>
+    <math style="margin-top:3.5px;"><mi>&phi;</mi></math>
 `;
 dictionaryUnitsOfMeasure["period"] = `
-    <math>T</math>
+    <math style="margin-top:3.5px;">T</math>
 `;
 dictionaryUnitsOfMeasure["none"] = `
     <math></math>
 `;
 dictionaryUnitsOfMeasure["ts"] = `
-    <math><msub><mi>&omega;</mi><mi>d</mi></msub></math>  
+    <math style="margin-top:3.5px;"><msub><mi>&omega;</mi><mi>d</mi></msub></math>  
 `;
 dictionaryUnitsOfMeasure["ts_pid"] = `
     <math>
@@ -517,44 +517,44 @@ dictionaryUnitsOfMeasure["ts_pid"] = `
     </msub></math>  
 `;
 dictionaryUnitsOfMeasure["gains_kp"] = `
-    <math><msub><mi>K</mi><mi>p</mi></msub><mspace width="0.5px"/></math>
+    <math style="margin-top:3.5px;"><msub><mi>K</mi><mi>p</mi></msub><mspace width="0.5px"/></math>
     
 `;
 dictionaryUnitsOfMeasure["gains_ki"] = `
-    <math><msub><mi>K</mi><mi>i</mi></msub><mspace width="4px"/></math>
+    <math style="margin-top:3.5px;"><msub><mi>K</mi><mi>i</mi></msub><mspace width="4px"/></math>
     
 `;
 dictionaryUnitsOfMeasure["gains_kd"] = `
-    <math><msub><mi>K</mi><mi>D</mi></msub></math>
+    <math style="margin-top:3.5px;"><msub><mi>K</mi><mi>D</mi></msub></math>
     
 `;
 dictionaryUnitsOfMeasure["sample_time"] = `
-    <math><mi>T</mi></math>
+    <math style="margin-top:3.5px;"><mi>T</mi></math>
 `;
 
 
 dictionaryUnitsOfMeasure["armature_resistance"] = `
-    <math><msub><mi>R</mi><mi>a</mi></msub></math>
+    <math style="margin-top:3.5px;"><msub><mi>R</mi><mi>a</mi></msub></math>
     
 `;
 dictionaryUnitsOfMeasure["armature_inductance"] = `
-    <math><msub><mi>L</mi><mi>a</mi></msub></math>
+    <math style="margin-top:3.5px;"><msub><mi>L</mi><mi>a</mi></msub></math>
     
 `;
 dictionaryUnitsOfMeasure["back_electromotive_force_constant"] = `
-    <math><msub><mi>K</mi><mi>b</mi></msub></math>
+    <math style="margin-top:3.5px;"><msub><mi>K</mi><mi>b</mi></msub></math>
     
 `;
 dictionaryUnitsOfMeasure["torque_constant"] = `
-    <math><msub><mi>K</mi><mi>t</mi></msub></math>
+    <math style="margin-top:3.5px;"><msub><mi>K</mi><mi>t</mi></msub></math>
     
 `;
 dictionaryUnitsOfMeasure["motor_rotor_inertia"] = `
-    <math><msub><mi>J</mi><mi>m</mi></msub></math>
+    <math style="margin-top:3.5px;"><msub><mi>J</mi><mi>m</mi></msub></math>
     
 `;
 dictionaryUnitsOfMeasure["viscous_friction_coefficient"] = `
-    <math><msub><mi>B</mi><mi>m</mi></msub></math>
+    <math style="margin-top:3.5px;"><msub><mi>B</mi><mi>m</mi></msub></math>
     
 `;
 
@@ -723,6 +723,13 @@ function sbf_basicform(action, for_d, label_text, Unitofmeasure, type, step, val
 
     bf.appendChild(form);
 
+
+    const box = document.getElementById('my-box');
+  
+    bf.addEventListener('click', () => {
+            input.focus();
+    });
+
     return bf;
 }
 function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
@@ -756,7 +763,7 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     input.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input.name = for_d + "kp"; //Amp 
     input.id = "UI_" + for_d + "kp"; //UI_amp
-    input.style.width = 8 + "em";
+    input.style.width = 6 + "em";
     input.value = window.pid_con["kp"];
     div.appendChild(input);
 
@@ -769,7 +776,7 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     input2.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input2.name = for_d + "ki"; //Amp 
     input2.id = "UI_" + for_d + "ki"; //UI_amp
-    input2.style.width = 8 + "em";
+    input2.style.width = 6 + "em";
     input2.value = window.pid_con["ki"];
     div.appendChild(input2);
 
@@ -783,7 +790,7 @@ function sbf_gains(action, for_d, label_text, Unitofmeasure, type, step) {
     input3.step = step; //0.01  //i genuinly hope this doesnt cause any mistakes
     input3.name = for_d + "kd"; //Amp 
     input3.id = "UI_" + for_d + "kd"; //UI_amp
-    input3.style.width = 8 + "em";
+    input3.style.width = 6 + "em";
     input3.value = window.pid_con["kd"];
     div.appendChild(input3);
 
@@ -1942,14 +1949,16 @@ function change_to_PID(condis) {
     const sbf = document.createElement('div');
     sbf.classList.add('sidebar_basic_elements');
     sbf.classList.add('formula');
-    sbf.style.fontSize = '22px';
+    
     sbg2.appendChild(sbf);
 
     if (condis == CONTINUOUS) {
         sbf.innerHTML = dictionaryFormulas["pid"];
+        sbf.style.fontSize = '18px';
     }
     else {
         sbf.innerHTML = dictionaryFormulas["pid_dis"];
+        sbf.style.fontSize = '22px';
     }
 
 

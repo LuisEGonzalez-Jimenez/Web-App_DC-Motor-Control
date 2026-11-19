@@ -1,23 +1,20 @@
-## current funtionality
-* creating simulated graphs for a certain voltage
+# Sistema Web para la Simulación, Control y Monitoreo de un Motor DC mediante Comunicación BLE con ESP32 
+
+
+
 
 
 ## my developer debt:
-
-* when you click enter to the text box for vcc, it atttempts to submit it when it might not even have everything with it.
-* the side bar might be too big
-* creating sidebar groups sends height yet the whole height system got deprecated. (really got to see this)
 * rename msot variables and have consistent naming conventions.
 
 ## future notes / documentation
 * console.logs dont work because the pyscript kinda steals the console and thus whenever we attempt to console log anything we cant but prints in the pyscript work.
-* thus if you want to debud use console.warns("text")
+* thus if you want to debug use console.warns("text");
 
 
 
 ## things i want to do:
 * enter executes play
-* we can input the amount of time for the simulation, or have the stop functionality.
 
 
 ## commit structure

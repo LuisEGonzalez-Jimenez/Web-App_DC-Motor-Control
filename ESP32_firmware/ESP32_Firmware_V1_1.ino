@@ -1,23 +1,18 @@
 /*
 ==============================================================
-Pedagogical DC Motor Control Platform - ESP32 Firmware V1.2
+Pedagogical DC Motor Control Platform - ESP32 Firmware V2.0
 Authors: Luis Ricardo Rivera-Goitia, Luis Enrique González-Jiménez
 ITESO – Universidad Jesuita de Guadalajara
 Requires: esp32 by Espressif Systems 3.x (tested with 3.1.3)
 --------------------------------------------------------------
-V1.2 – Added BLE (Nordic UART Service) transport for the Web
-       Bluetooth client. Uses the SAME JSON command schema and
-       the SAME 8-column CSV output as MQTT/TCP.
+V2.0 – Exclusively BLE (Nordic UART Service).
+       Removed WiFi / MQTT / TCP / TFT touchscreen UI.
+       Same JSON command schema and same 8-column CSV output.
 ==============================================================
 */
 
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <WiFiServer.h>
-#include <PubSubClient.h>
 #include "Adafruit_INA219.h"
 #include <ArduinoJson.h>
-#include <TFT_eSPI.h>
 #include "esp_timer.h"
 #include <Wire.h>
 
@@ -44,36 +39,6 @@ V1.2 – Added BLE (Nordic UART Service) transport for the Web
   #define DBG(x)
 #endif
 
-// ==========================================================
-// USER SETTINGS: replace with your own data before uploading
-// ==========================================================
-const char* ssid         = "YOUR_WIFI_SSID";
-const char* password     = "YOUR_WIFI_PASSWORD";
-
-const char* mqttServer   = "YOUR_CLUSTER_ID.s1.eu.hivemq.cloud";
-const char* mqttUserName = "YOUR_MQTT_USERNAME";
-const char* mqttPwd      = "YOUR_MQTT_PASSWORD";
-const int   mqttPort     = 8883;
-
-// Topics
-const char* topic  = "ESP32/data";
-const char* topic2 = "ESP32/signals";
-
-WiFiClientSecure espClient;
-PubSubClient client(espClient);
-
-// TCP Server
-WiFiServer tcpServer(80);
-WiFiClient tcpClient;
-
-// TFT Screen
-TFT_eSPI tft = TFT_eSPI();
-int currentScreen = 0;
-bool isTCPClientConnected = false;
-
-// Current Sensor
-Adafruit_INA219 ina219;
-
 // === BLE ===
 // Nordic UART Service UUIDs – must match the JS client exactly.
 #define BLE_SERVICE_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
@@ -83,45 +48,13 @@ Adafruit_INA219 ina219;
 BLEServer*         pServer  = nullptr;
 BLECharacteristic* pRxChar  = nullptr;   // receives commands
 BLECharacteristic* pTxChar  = nullptr;   // streams samples
-bool               bleConnected     = false;
-bool               bleInitialized   = false;
-uint16_t           bleConnId        = 0xFFFF;
-String             bleRxBuffer      = "";   // accumulate until '\n'
+bool               bleConnected   = false;
+bool               bleInitialized = false;
+uint16_t           bleConnId      = 0xFFFF;
+String             bleRxBuffer    = "";   // accumulate until '\n'
 
-// Certificate (ISRG Root X1)
-static const char *root_ca PROGMEM = R"EOF(
-  -----BEGIN CERTIFICATE-----
-MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
-TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
-cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
-WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
-ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
-MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
-h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
-0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
-A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
-T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
-B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
-B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
-KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
-OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
-jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
-qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
-rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
-HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
-hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
-ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
-3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
-NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
-ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
-TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
-jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
-oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
-4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
-mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
-emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
------END CERTIFICATE-----
-)EOF";
+// Current Sensor
+Adafruit_INA219 ina219;
 
 const float pi = 3.14159265358979323846;
 
@@ -194,7 +127,6 @@ QueueHandle_t sampleQueue;
 #define SAMPLE_QUEUE_LEN 400
 #define SEND_INTERVAL_MS 50
 #define MAX_SAMPLES_PER_MSG 20
-#define MQTT_BUFFER_SIZE 2048
 
 // ==========================================================
 // Control task and timer
@@ -206,16 +138,7 @@ uint32_t ctrlPeriod_us = 5000;
 // ==========================================================
 // Prototypes
 // ==========================================================
-void showMainMenu();
-void handleTouch(int x, int y);
-void showMqttMenu();
-void showWiFiMenu();
-void startMQTTBroker();
-void startHotspot();
-void startBluetooth();      // === BLE ===
-bool setup_wifi();
-void reconnect();
-void callback(char* topic, byte* payload, unsigned int length);
+void startBluetooth();
 void parseCommand(const char* json, size_t len);
 bool jsonBool(JsonVariantConst v, bool def);
 void IRAM_ATTR readEncoder();
@@ -224,7 +147,7 @@ void resetSpeedEstimator();
 void controlTask(void* pv);
 void onControlTimer(void* arg);
 void sendPendingSamples();
-void sendBleBatch(const String& batch);   // === BLE ===
+void sendBleBatch(const String& batch);
 
 // Writes the INA219 configuration register
 void ina219SetAveraging() {
@@ -244,10 +167,6 @@ void setup() {
 #else
   Serial.begin(115200);
 #endif
-
-  tft.init();
-  tft.setRotation(3);
-  showMainMenu();
 
   ina219.begin();
   ina219SetAveraging();
@@ -277,77 +196,34 @@ void setup() {
   args.name = "ctrl";
   esp_timer_create(&args, &ctrlTimer);
   esp_timer_start_periodic(ctrlTimer, ctrlPeriod_us);
+
+  startBluetooth();
 }
 
 // ==========================================================
 // LOOP
 // ==========================================================
 void loop() {
-  uint16_t raw_x, raw_y;
-  if (tft.getTouch(&raw_x, &raw_y)) {
-    uint16_t x = map(raw_y, 240, 0, 0, 320);
-    uint16_t y = map(raw_x, 320, 0, 0, 240);
-    handleTouch(x, y);
-    delay(200);
-  }
-
-  // MQTT Mode
-  if (currentScreen == 3 && client.connected()) {
-    client.loop();
-  }
-
-  // TCP Mode
-  if (currentScreen == 4) {
-    if (WiFi.getMode() == WIFI_AP || WiFi.status() == WL_CONNECTED) {
-      if (!tcpClient || !tcpClient.connected()) {
-        tcpClient = tcpServer.available();
-        if (tcpClient) {
-          DBG("TCP Client connected");
-          isTCPClientConnected = true;
-        }
-      }
-
-      if (tcpClient && tcpClient.connected()) {
-        while (tcpClient.available()) {
-          String msg = tcpClient.readStringUntil('\n');
-          msg.trim();
-
-          if (msg == "hello") {
-            tcpClient.println("ESP32 ready");
-            tcpClient.flush();
-          } else {
-            StaticJsonDocument<1024> jsonDoc;
-            DeserializationError error = deserializeJson(jsonDoc, msg);
-            if (!error) {
-              parseCommand(msg.c_str(), msg.length());
-              tcpClient.println("OK");
-              tcpClient.flush();
-            } else {
-              tcpClient.println("Unknown command.");
-              tcpClient.flush();
-            }
-          }
-        }
-      }
-    }
-  }
-
   sendPendingSamples();
-
   delay(1);
 }
 
 // ==========================================================
-// Sending samples in batches
+// Sending samples in batches (BLE only)
 // ==========================================================
 void sendPendingSamples() {
   static unsigned long lastSend = 0;
   if (millis() - lastSend < SEND_INTERVAL_MS) return;
   lastSend = millis();
 
-  bool mqttOK = (currentScreen == 3 && client.connected());
-  bool tcpOK  = (tcpClient && tcpClient.connected());
-  bool bleOK  = (bleConnected && pTxChar != nullptr);   // === BLE ===
+  // Nobody listening: drain the queue so it doesn't overflow.
+  if (!bleConnected || pTxChar == nullptr) {
+    Sample drop;
+    while (uxQueueMessagesWaiting(sampleQueue) > 0) {
+      xQueueReceive(sampleQueue, &drop, 0);
+    }
+    return;
+  }
 
   Sample s;
   while (uxQueueMessagesWaiting(sampleQueue) > 0) {
@@ -363,9 +239,7 @@ void sendPendingSamples() {
     }
     if (n == 0) break;
 
-    if (mqttOK) client.publish(topic2, batch.c_str());
-    if (tcpOK)  tcpClient.print(batch);
-    if (bleOK)  sendBleBatch(batch);                     // === BLE ===
+    sendBleBatch(batch);
 #if DEBUG
     Serial.print(batch);
 #endif
@@ -377,7 +251,7 @@ void sendPendingSamples() {
 // Chunks at 180 B (safe under the negotiated MTU; the JS _lineBuffer
 // reassembles lines transparently regardless of chunk boundaries).
 void sendBleBatch(const String& batch) {
-  if (!pTxChar) return;
+  if (!pTxChar || !bleConnected) return;
   const size_t maxChunk = 180;
   const size_t len      = batch.length();
   const char*  data     = batch.c_str();
@@ -385,7 +259,7 @@ void sendBleBatch(const String& batch) {
   while (off < len) {
     size_t n = (len - off < maxChunk) ? (len - off) : maxChunk;
     pTxChar->setValue((uint8_t*)(data + off), n);
-    if (!pTxChar->notify()) break;   // subscriber gone; stop this batch
+    pTxChar->notify();          // NOTE: returns void on ESP32 Arduino BLE
     off += n;
   }
 }
@@ -403,10 +277,7 @@ class ServerCallbacks : public BLEServerCallbacks {
     bleConnected = false;
     bleConnId    = 0xFFFF;
     bleRxBuffer  = "";
-    if (currentScreen == 6) {
-      // Re-advertise so the browser can reconnect without re-pairing
-      BLEDevice::startAdvertising();
-    }
+    BLEDevice::startAdvertising();   // re-advertise so the browser can reconnect
     DBG("BLE client disconnected");
   }
 };
@@ -417,10 +288,11 @@ class ServerCallbacks : public BLEServerCallbacks {
 // across multiple onWrite callbacks before calling parseCommand().
 class RxCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* ch) override {
-    std::string value = ch->getValue();
-    if (value.empty()) return;
+    String value = ch->getValue();
+    if (value.isEmpty()) return;
 
-    for (char c : value) {
+    for (size_t i = 0; i < value.length(); i++) {
+      char c = value[i];
       if (c == '\n' || c == '\r') {
         if (bleRxBuffer.length() > 0) {
           parseCommand(bleRxBuffer.c_str(), bleRxBuffer.length());
@@ -434,202 +306,8 @@ class RxCallbacks : public BLECharacteristicCallbacks {
   }
 };
 
-// ==========================================================
-// Communications: WiFi / MQTT / TCP / BLE / screen
-// ==========================================================
-bool setup_wifi() {
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  unsigned long startAttemptTime = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) delay(500);
-  if (WiFi.status() == WL_CONNECTED) return true;
-  WiFi.disconnect(true);
-  return false;
-}
-
-void reconnect() {
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_YELLOW);
-  tft.setTextSize(2);
-  tft.setCursor(20, 40);
-  tft.println("MQTT Broker Mode");
-  tft.setCursor(20, 80);
-  tft.setTextColor(TFT_WHITE);
-  tft.println("Status: Connecting...");
-  int retryCount = 0;
-  while (!client.connected() && retryCount++ < 5) {
-    if (client.connect("ESP32Client", mqttUserName, mqttPwd)) {
-      client.subscribe("ESP32/data");
-      client.subscribe("ESP32/signals");
-      tft.fillRect(0, 80, 320, 120, TFT_BLACK);
-      tft.setCursor(20, 80);
-      tft.setTextColor(TFT_GREEN);
-      tft.println("Status: Connected!");
-      tft.setCursor(20, 120);
-      tft.setTextColor(TFT_WHITE);
-      tft.print("Topics Subscribed");
-      tft.fillRect(30, 190, 260, 40, TFT_RED);
-      tft.setCursor(50, 200);
-      tft.println("Go back to Main Menu");
-      currentScreen = 3;
-      return;
-    }
-    delay(500);
-  }
-  tft.setTextColor(TFT_RED);
-  tft.setCursor(20, 150);
-  tft.println("MQTT Connection Failed.");
-  tft.fillRect(30, 190, 260, 40, TFT_RED);
-  tft.setCursor(60, 205);
-  tft.setTextColor(TFT_WHITE);
-  tft.println("Disconnect MQTT");
-  currentScreen = 5;
-}
-
-// ==========================================================
-// Main menu – three buttons now
-// ==========================================================
-void showMainMenu() {
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_WHITE);
-  tft.setTextSize(2);
-  tft.setCursor(20, 10);
-  tft.println("Motor Control Interface");
-
-  tft.fillRect(60, 40, 210, 50, TFT_BLUE);
-  tft.setCursor(75, 56);
-  tft.println("1: MQTT Broker");
-
-  tft.fillRect(60, 105, 210, 50, TFT_RED);
-  tft.setCursor(75, 121);
-  tft.println("2: WiFi Computer");
-
-  tft.fillRect(60, 170, 210, 50, TFT_GREEN);
-  tft.setCursor(75, 186);
-  tft.println("3: Bluetooth BLE");
-
-  currentScreen = 0;
-}
-
-void handleTouch(int x, int y) {
-  if (currentScreen == 0) {
-    if      (x > 60 && x < 270 && y > 40  && y < 90)  showMqttMenu();
-    else if (x > 60 && x < 270 && y > 105 && y < 155) showWiFiMenu();
-    else if (x > 60 && x < 270 && y > 170 && y < 220) startBluetooth();   // === BLE ===
-  } else if ((currentScreen == 1 || currentScreen == 2) && x > 30 && x < 250) {
-    if (y > 60 && y < 110) (currentScreen == 1) ? startMQTTBroker() : startHotspot();
-    else if (y > 140 && y < 190) showMainMenu();
-  } else if ((currentScreen == 3 || currentScreen == 4 || currentScreen == 5 || currentScreen == 6) &&
-             x > 30 && x < 290 && y > 190 && y < 230) {
-    client.disconnect();
-    WiFi.disconnect(true);
-    // === BLE ===
-    if (bleConnected && pServer && bleConnId != 0xFFFF) {
-      pServer->disconnect(bleConnId);
-    }
-    if (bleInitialized) {
-      BLEDevice::getAdvertising()->stop();
-    }
-    showMainMenu();
-  }
-}
-
-void showMqttMenu() {
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_WHITE);
-  tft.setTextSize(2);
-  tft.setCursor(20, 10);
-  tft.println("Select Connection Method");
-  tft.fillRect(30, 60, 220, 50, TFT_BLUE);
-  tft.setCursor(40, 80);
-  tft.println("Connect to MQTT");
-  tft.fillRect(30, 140, 220, 50, TFT_GREEN);
-  tft.setCursor(40, 155);
-  tft.println("Back to Main Menu");
-  currentScreen = 1;
-}
-
-void showWiFiMenu() {
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_WHITE);
-  tft.setTextSize(2);
-  tft.setCursor(20, 10);
-  tft.println("Select Connection Method");
-  tft.fillRect(30, 60, 220, 50, TFT_BLUE);
-  tft.setCursor(40, 80);
-  tft.println("Connect to WiFi");
-  tft.fillRect(30, 140, 220, 50, TFT_GREEN);
-  tft.setCursor(40, 155);
-  tft.println("Back to Main Menu");
-  currentScreen = 2;
-}
-
-void startMQTTBroker() {
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_WHITE);
-  tft.setTextSize(2);
-  tft.setCursor(20, 60);
-  tft.println("Connecting...");
-  tft.setCursor(20, 100);
-  tft.setTextColor(TFT_YELLOW);
-  tft.println("Please wait...");
-
-  delay(500);
-
-  if (!setup_wifi()) {
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextColor(TFT_RED);
-    tft.setTextSize(2);
-    tft.setCursor(20, 60);
-    tft.println("Status: Connection Failed");
-    tft.setCursor(20, 100);
-    tft.setTextColor(TFT_YELLOW);
-    tft.println("Is Hotspot On?");
-    tft.fillRect(30, 190, 260, 40, TFT_RED);
-    tft.setCursor(50, 200);
-    tft.setTextColor(TFT_WHITE);
-    tft.println("Go back to Main Menu");
-    currentScreen = 5;
-    return;
-  }
-  espClient.setCACert(root_ca);
-  client.setServer(mqttServer, mqttPort);
-  client.setBufferSize(MQTT_BUFFER_SIZE);
-  client.setCallback(callback);
-  reconnect();
-}
-
-void startHotspot() {
-  WiFi.mode(WIFI_AP);
-  bool success = WiFi.softAP("ESP32_Hotspot", "12345678");
-  if (!success) {
-    DBG("SoftAP failed to start!");
-    return;
-  }
-
-  IPAddress IP = WiFi.softAPIP();
-  tcpServer.begin();
-
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_GREEN);
-  tft.setTextSize(2);
-  tft.setCursor(20, 40);
-  tft.println("SoftAP Mode Active");
-  tft.setCursor(20, 80);
-  tft.print("IP: ");
-  tft.println(IP);
-
-  tft.fillRect(30, 190, 260, 40, TFT_RED);
-  tft.setCursor(50, 200);
-  tft.setTextColor(TFT_WHITE);
-  tft.println("Go back to Main Menu");
-
-  currentScreen = 4;
-}
-
 // === BLE ===
 // Creates (once) and starts the BLE peripheral.
-// Idempotent: calling again just re-starts advertising.
 void startBluetooth() {
   if (!bleInitialized) {
     BLEDevice::init("ESP32-MotorBLE");   // name starts with "ESP32" (browser filter)
@@ -663,32 +341,12 @@ void startBluetooth() {
   }
 
   BLEDevice::startAdvertising();
-
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_GREEN);
-  tft.setTextSize(2);
-  tft.setCursor(20, 40);
-  tft.println("BLE Mode Active");
-  tft.setCursor(20, 90);
-  tft.setTextColor(TFT_WHITE);
-  tft.println("Name: ESP32-MotorBLE");
-  tft.setCursor(20, 130);
-  tft.println("Waiting for host...");
-  tft.fillRect(30, 190, 260, 40, TFT_RED);
-  tft.setCursor(50, 200);
-  tft.setTextColor(TFT_WHITE);
-  tft.println("Go back to Main Menu");
-
-  currentScreen = 6;
+  DBG("BLE advertising as ESP32-MotorBLE");
 }
 
 // ==========================================================
-// JSON commands (MQTT, TCP, and BLE all funnel through here)
+// JSON commands (BLE only)
 // ==========================================================
-void callback(char* topic, byte* payload, unsigned int length) {
-  parseCommand((const char*)payload, length);
-}
-
 bool jsonBool(JsonVariantConst v, bool def) {
   if (v.isNull())     return def;
   if (v.is<bool>())   return v.as<bool>();
