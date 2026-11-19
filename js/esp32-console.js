@@ -17,8 +17,6 @@ class ESP32Console extends HTMLElement {
     // Stable handler references
     this._onConnectClick    = () => this.connect();
     this._onDisconnectClick = () => this.disconnect();
-    this._onStartClick      = () => this.sendCommand('start');
-    this._onStopClick       = () => this.sendCommand('stop');
     this._onGattDisconnect  = () => this.handleDeviceUnplug();
     this._onNotify          = (e) => this.handleNotification(e);
 
@@ -27,6 +25,7 @@ class ESP32Console extends HTMLElement {
         :host { display: block; font-family: monospace; }
         button { margin: 2px; padding: 4px 10px; cursor: pointer; }
         button:disabled { cursor: not-allowed; opacity: 0.5; }
+        #status { font-weight: bold; color: #888; margin-left: 6px; }
         #realtime_console {
           background: #111; color: #0f0; padding: 8px;
           height: 200px; overflow-y: auto; white-space: pre-wrap;
@@ -36,42 +35,16 @@ class ESP32Console extends HTMLElement {
       <h2>ESP32 BLE Monitor</h2>
       <button id="connectBtn">Connect</button>
       <button id="disconnectBtn" disabled>Disconnect</button>
-      <button id="startBtn" disabled>Start</button>
-      <button id="stopBtn"  disabled>Stop</button>
+      <span id="status">disconnected</span>
       <div id="realtime_console"></div>
     `;
   }
 
-  connectedCallback() {
-    this.connectBtn    = this.shadowRoot.getElementById('connectBtn');
-    this.disconnectBtn = this.shadowRoot.getElementById('disconnectBtn');
-    this.startBtn      = this.shadowRoot.getElementById('startBtn');
-    this.stopBtn       = this.shadowRoot.getElementById('stopBtn');
-    this.outputDiv     = this.shadowRoot.getElementById('realtime_console');
+  /* ---------- public API used by the rest of the app ---------- */
 
-    // Grab the external container from index.html
-    const plotContainer = document.getElementById('plot_area_1');
-    if (plotContainer) {
-      this.plotter = new LivePlotter(plotContainer, 'Motor RPM', 100);
-    }
-
-    this.connectBtn.addEventListener('click', this._onConnectClick);
-    this.disconnectBtn.addEventListener('click', this._onDisconnectClick);
-    this.startBtn.addEventListener('click', this._onStartClick);
-    this.stopBtn.addEventListener('click', this._onStopClick);
-
-    if (!navigator.bluetooth) {
-      this.log('Error: Web Bluetooth not supported. Use Chrome or Edge.');
-      this.connectBtn.disabled = true;
-    }
-  }
-
-  disconnectedCallback() {
-    this.connectBtn.removeEventListener('click', this._onConnectClick);
-    this.disconnectBtn.removeEventListener('click', this._onDisconnectClick);
-    this.startBtn.removeEventListener('click', this._onStartClick);
-    this.stopBtn.removeEventListener('click', this._onStopClick);
-    this.disconnect().catch(() => {});
+  get connected() {
+    return !!(this.device && this.device.gatt &&
+              this.device.gatt.connected && this.rxCharacteristic);
   }
 
   log(msg) {
@@ -80,21 +53,81 @@ class ESP32Console extends HTMLElement {
     this.outputDiv.scrollTop = this.outputDiv.scrollHeight;
   }
 
+  /**
+   * Send a command to the ESP32.
+   * Accepts a JSON string or a plain object. Examples:
+   *   esp.sendCommand({interruptor:"off"});
+   *   esp.sendCommand({interruptor:"on",Type:"Step",VCC:12,A:6,t0:1.0,offset:0});
+   *   esp.sendCommand({interruptor:"on",Type:"Sine",VCC:12,A:3,omega:6.283,
+   *                    phi:0,offset:0,Discrete:true,T:0.01});
+   *   esp.sendCommand({interruptor:"on",Type:"PID",VCC:12,Kp:2,Ki:5,Kd:0.01,
+   *                    des_speed:20,filt:true,omega0:50});
+   * Chunks into MTU-safe writes (20 B) and appends '\n' so the ESP32 can
+   * buffer until end-of-command before parsing.
+   * @returns {Promise<boolean>} true on success
+   */
+  async sendCommand(cmd) {
+    if (!this.rxCharacteristic || !this.connected) {
+      this.log('Not connected.');
+      return false;
+    }
+    const text  = (typeof cmd === 'string') ? cmd : JSON.stringify(cmd);
+    const bytes = new TextEncoder().encode(text + '\n');
+    const CHUNK = 20; // MTU 23 - 3 header
+
+    try {
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        // Acknowledged writes: guarantees order, no dropped chunks
+        await this.rxCharacteristic.writeValue(bytes.slice(i, i + CHUNK));
+      }
+      this.log('>> ' + text);
+      return true;
+    } catch (err) {
+      this.log('[WRITE ERROR] ' + err.message);
+      return false;
+    }
+  }
+
+  /* ---------- lifecycle ---------- */
+
+  connectedCallback() {
+    this.connectBtn    = this.shadowRoot.getElementById('connectBtn');
+    this.disconnectBtn = this.shadowRoot.getElementById('disconnectBtn');
+    this.outputDiv     = this.shadowRoot.getElementById('realtime_console');
+    this.statusSpan    = this.shadowRoot.getElementById('status');
+
+    const plotContainer = document.getElementById('plot_area_1');
+    if (plotContainer) {
+      this.plotter = new LivePlotter(plotContainer, 'Motor RPM', 100);
+    }
+
+    this.connectBtn.addEventListener('click', this._onConnectClick);
+    this.disconnectBtn.addEventListener('click', this._onDisconnectClick);
+
+    if (!navigator.bluetooth) {
+      this.log('Error: Web Bluetooth not supported. Use Chrome or Edge.');
+      this.connectBtn.disabled = true;
+    }
+  }
+
+  disconnectedCallback() {
+    this.connectBtn?.removeEventListener('click', this._onConnectClick);
+    this.disconnectBtn?.removeEventListener('click', this._onDisconnectClick);
+    this.disconnect().catch(() => {});
+  }
+
   async connect() {
     if (this.device || this.isReading) return;
     this.connectBtn.disabled = true;
 
     try {
-      // 1. Ask user to pick the ESP32
       this.device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: 'ESP32' }],                    // matches "ESP32-BLE-Console"
+        filters: [{ namePrefix: 'ESP32' }],
         optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
       });
 
-      // 2. Connect to the GATT server
       this.server = await this.device.gatt.connect();
 
-      // 3. Grab the NUS service + both characteristics
       const service = await this.server.getPrimaryService(
         '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
       );
@@ -105,121 +138,122 @@ class ESP32Console extends HTMLElement {
         '6e400002-b5a3-f393-e0a9-e50e24dcca9e' // write:  us -> ESP32
       );
 
-      // 4. Subscribe to notifications BEFORE enabling the buttons
       this.txCharacteristic.addEventListener(
         'characteristicvaluechanged', this._onNotify
       );
       await this.txCharacteristic.startNotifications();
 
-      // 5. Wire up disconnection and enable UI
       this.device.addEventListener('gattserverdisconnected', this._onGattDisconnect);
       this.isReading = true;
 
       this.log('[CONNECTED to ' + (this.device.name || 'ESP32') + ']');
+      this._setStatus('connected', 'green');
       this.connectBtn.disabled    = true;
       this.disconnectBtn.disabled = false;
-      this.startBtn.disabled      = false;
-      this.stopBtn.disabled       = false;
+
+      this.dispatchEvent(new CustomEvent('connectionchange',
+        { detail: { connected: true } }));
 
     } catch (err) {
       this.log('Error: ' + err.message);
-      await this.disconnect(); // clean up partial state
+      this._setStatus('disconnected', 'red');
+      await this.disconnect();
     }
-  }
-
-  /**
-   * Write a command to the RX characteristic.
-   * BLE writes are limited to ~20 bytes by default, so keep commands short.
-   */
-  async sendCommand(cmd) {
-    if (!this.rxCharacteristic) {
-      this.log('Not connected.');
-      return;
-    }
-    try {
-      const data = new TextEncoder().encode(cmd);
-      // Prefer writeWithoutResponse for low-latency commands when available,
-      // otherwise fall back to writeValue (acknowledged write).
-      if (this.rxCharacteristic.properties.writeWithoutResponse) {
-        await this.rxCharacteristic.writeValueWithoutResponse(data);
-      } else {
-        await this.rxCharacteristic.writeValue(data);
-      }
-      this.log('>> ' + cmd);
-    } catch (err) {
-      this.log('[WRITE ERROR] ' + err.message);
-    }
-  }
-  /**
-   * Called on every notification from the ESP32.
-   * Reassembles lines because notifications can split a single line
-   * across multiple BLE packets (MTU ~20 bytes by default).
-   */
-  handleNotification(event) {
-    const value = event.target.value;
-    this._lineBuffer += this._decoder.decode(value, { stream: true });
-
-    const lines = this._lineBuffer.split('\n');
-    this._lineBuffer = lines.pop();
-
-    for (let line of lines) {
-      line = line.replace(/\r$/, '');
-      if (line.length > 0) {
-        this.log(line);
-
-        // Parse "RPM:123.45" sent by the ESP32
-        if (line.startsWith('RPM:')) {
-          const rpmValue = parseFloat(line.split(':')[1]);
-          if (!isNaN(rpmValue) && this.plotter) {
-            const timestamp = new Date().toLocaleTimeString([], { 
-              hour12: false, minute: '2-digit', second: '2-digit' 
-            });
-            this.plotter.graphData(timestamp, rpmValue);
-          }
-        }
-      }
-    }
-  }
-
-  handleDeviceUnplug() {
-    this.log('[DEVICE DISCONNECTED]');
-    this.disconnect().catch(() => {});
   }
 
   async disconnect() {
     if (!this.device && !this.isReading) return;
     this.isReading = false;
 
-    // 1. Stop notifications on TX
     if (this.txCharacteristic) {
-      try { this.txCharacteristic.removeEventListener(
-              'characteristicvaluechanged', this._onNotify); } catch (e) {}
+      try {
+        this.txCharacteristic.removeEventListener(
+          'characteristicvaluechanged', this._onNotify);
+      } catch (e) {}
       try { await this.txCharacteristic.stopNotifications(); } catch (e) {}
     }
 
-    // 2. Drop the GATT connection
     if (this.device) {
-      try { this.device.removeEventListener(
-              'gattserverdisconnected', this._onGattDisconnect); } catch (e) {}
+      try {
+        this.device.removeEventListener(
+          'gattserverdisconnected', this._onGattDisconnect);
+      } catch (e) {}
       if (this.device.gatt.connected) {
         try { this.device.gatt.disconnect(); } catch (e) {}
       }
     }
 
-    // 3. Reset state
-    this.device           = null;
-    this.server           = null;
+    this.device = null;
+    this.server = null;
     this.txCharacteristic = null;
     this.rxCharacteristic = null;
-    this._lineBuffer      = '';
+    this._lineBuffer = '';
 
-    // 4. Reset UI
     if (this.connectBtn) {
       this.connectBtn.disabled    = false;
       this.disconnectBtn.disabled = true;
-      this.startBtn.disabled      = true;
-      this.stopBtn.disabled       = true;
     }
+    this._setStatus('disconnected', 'red');
+
+    this.dispatchEvent(new CustomEvent('connectionchange',
+      { detail: { connected: false } }));
+  }
+
+  /* ---------- incoming data ---------- */
+
+  /**
+   * The ESP32 streams CSV batches. One sample per line:
+   *   current_mA,w_rad_s,time_s,Vt,w_filt,current_filt,duty,e\n
+   * A single line can be split across BLE notifications, so we
+   * keep a line buffer and only emit complete lines.
+   */
+  handleNotification(event) {
+    this._lineBuffer += this._decoder.decode(event.target.value, { stream: true });
+
+    const lines = this._lineBuffer.split('\n');
+    this._lineBuffer = lines.pop(); // incomplete tail
+
+    for (let line of lines) {
+      line = line.replace(/\r$/, '').trim();
+      if (!line) continue;
+
+      this.log(line);
+
+      const sample = this._parseSample(line);
+      if (!sample) continue;
+
+      if (this.plotter) {
+        // w is rad/s; convert to RPM for the plotter
+        const rpm = sample.w * 60 / (2 * Math.PI);
+        const ts  = new Date().toLocaleTimeString([], {
+          hour12: false, minute: '2-digit', second: '2-digit'
+        });
+        this.plotter.graphData(ts, rpm);
+      }
+
+      this.dispatchEvent(new CustomEvent('sample', { detail: sample }));
+    }
+  }
+
+  _parseSample(line) {
+    const parts = line.split(',');
+    if (parts.length < 8) return null;
+    const nums = parts.slice(0, 8).map(Number);
+    if (nums.some(isNaN)) return null;
+    const [current, w, time_s, Vt, w_filt, current_filt, duty, e] = nums;
+    return { current, w, time_s, Vt, w_filt, current_filt, duty, e };
+  }
+
+  handleDeviceUnplug() {
+    this.log('[DEVICE DISCONNECTED]');
+    this._setStatus('disconnected', 'red');
+    this.disconnect().catch(() => {});
+  }
+
+  _setStatus(text, color) {
+    if (!this.statusSpan) return;
+    this.statusSpan.textContent = text;
+    this.statusSpan.style.color = color;
   }
 }
 

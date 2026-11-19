@@ -480,6 +480,9 @@ html {
     color: rgba(51, 51, 51);
     border-width: 0px;
 }
+.pas_buttons:hover{
+    background-color: rgb(220, 220, 220);
+}
 .container_for_simulate_data{
     background-color: aliceblue;
 }
