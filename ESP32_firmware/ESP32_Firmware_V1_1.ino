@@ -1,6 +1,6 @@
 /*
 ==============================================================
-Pedagogical DC Motor Control Platform - ESP32 Firmware V2.0
+Pedagogical DC Motor Control Platform - ESP32 Firmware V2.1
 Authors: Luis Ricardo Rivera-Goitia, Luis Enrique González-Jiménez
 ITESO – Universidad Jesuita de Guadalajara
 Requires: esp32 by Espressif Systems 3.x (tested with 3.1.3)
@@ -8,6 +8,19 @@ Requires: esp32 by Espressif Systems 3.x (tested with 3.1.3)
 V2.0 – Exclusively BLE (Nordic UART Service).
        Removed WiFi / MQTT / TCP / TFT touchscreen UI.
        Same JSON command schema and same 8-column CSV output.
+
+V2.1 – Safety hardening:
+       * validateParams() rejects out-of-range JSON params before
+         they reach the control loop (VCC, A, offset, omega, t0,
+         T, N, Kp, Ki, Kd, des_speed, omega0, omega0c) plus
+         mode-specific feasibility (|A|+|offset| <= VCC, etc.).
+       * applyVoltage() clamps V to +/-VCC, rate-limits ramp-up
+         (soft-start ~100 V/s), snaps to 0 V on explicit zero,
+         and fails safe (0 V) on non-finite V or VCC<=0.
+       * onDisconnect() forces the motor OFF on BLE link loss.
+       * controlTask() floors dt at 100 us to avoid Kd/Ts blowup
+         from a spurious early wakeup, and clamps the reported
+         Vt to +/-VCC for Step/Sine so CSV matches duty.
 ==============================================================
 */
 
@@ -15,6 +28,7 @@ V2.0 – Exclusively BLE (Nordic UART Service).
 #include <ArduinoJson.h>
 #include "esp_timer.h"
 #include <Wire.h>
+#include <math.h>
 
 // === BLE ===
 #include <BLEDevice.h>
@@ -22,10 +36,7 @@ V2.0 – Exclusively BLE (Nordic UART Service).
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-// INA219 configuration (register 0x00), same as the Adafruit library's
-// (32 V, PGA /8 = 320 mV, 12-bit bus, continuous) but with averaged
-// current measurement: 12 bits x 8 samples = 4.26 ms.
-//   0x2000 BRNG 32V | 0x1800 PGA /8 | 0x0180 BADC 12b | 0x0058 SADC 8x | 0x0007 continuous
+// INA219 configuration (register 0x00) - averaged current.
 #define INA219_ADDR        0x40
 #define INA219_CONFIG_AVG8 0x39DF
 
@@ -39,19 +50,23 @@ V2.0 – Exclusively BLE (Nordic UART Service).
   #define DBG(x)
 #endif
 
+// Set to 1 to send "ERR:<reason>\n" over the TX characteristic
+// when a command is rejected by validateParams(). Set to 0 if
+// your JS CSV parser cannot tolerate non-CSV lines on TX.
+#define BLE_ERROR_REPORTING 1
+
 // === BLE ===
-// Nordic UART Service UUIDs – must match the JS client exactly.
 #define BLE_SERVICE_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
-#define BLE_RX_UUID      "6e400002-b5a3-f393-e0a9-e50e24dcca9e"   // browser -> ESP32 (write)
-#define BLE_TX_UUID      "6e400003-b5a3-f393-e0a9-e50e24dcca9e"   // ESP32 -> browser (notify)
+#define BLE_RX_UUID      "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+#define BLE_TX_UUID      "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
 BLEServer*         pServer  = nullptr;
-BLECharacteristic* pRxChar  = nullptr;   // receives commands
-BLECharacteristic* pTxChar  = nullptr;   // streams samples
+BLECharacteristic* pRxChar  = nullptr;
+BLECharacteristic* pTxChar  = nullptr;
 bool               bleConnected   = false;
 bool               bleInitialized = false;
 uint16_t           bleConnId      = 0xFFFF;
-String             bleRxBuffer    = "";   // accumulate until '\n'
+String             bleRxBuffer    = "";
 
 // Current Sensor
 Adafruit_INA219 ina219;
@@ -73,7 +88,7 @@ const int STBY = 27;
 #define ENC_MIN_PULSE_US 100UL
 
 // ==========================================================
-// Encoder (variables shared with the ISR)
+// Encoder
 // ==========================================================
 volatile unsigned long t = 0;
 volatile unsigned long t_m = 0;
@@ -107,8 +122,12 @@ Params P = {};
 volatile uint32_t cmdSeq = 0;
 portMUX_TYPE paramMux = portMUX_INITIALIZER_UNLOCKED;
 
+// Pending error message (sent over BLE by loop, if enabled)
+static char   pendingErr[96] = "";
+portMUX_TYPE  errMux = portMUX_INITIALIZER_UNLOCKED;
+
 // ==========================================================
-// Sample queue (control task -> loop)
+// Sample queue
 // ==========================================================
 struct Sample {
   float  current;
@@ -141,6 +160,8 @@ uint32_t ctrlPeriod_us = 5000;
 void startBluetooth();
 void parseCommand(const char* json, size_t len);
 bool jsonBool(JsonVariantConst v, bool def);
+const char* validateParams(const Params& p, Mode m);
+void rejectCommand(const char* reason);
 void IRAM_ATTR readEncoder();
 float computeSpeed();
 void resetSpeedEstimator();
@@ -216,6 +237,18 @@ void sendPendingSamples() {
   if (millis() - lastSend < SEND_INTERVAL_MS) return;
   lastSend = millis();
 
+  // Send any pending rejection notice first (optional).
+#if BLE_ERROR_REPORTING
+  char errCopy[sizeof(pendingErr)];
+  portENTER_CRITICAL(&errMux);
+  memcpy(errCopy, pendingErr, sizeof(errCopy));
+  pendingErr[0] = '\0';
+  portEXIT_CRITICAL(&errMux);
+  if (errCopy[0] != '\0' && bleConnected && pTxChar != nullptr) {
+    sendBleBatch(String("ERR:") + errCopy + "\n");
+  }
+#endif
+
   // Nobody listening: drain the queue so it doesn't overflow.
   if (!bleConnected || pTxChar == nullptr) {
     Sample drop;
@@ -246,10 +279,7 @@ void sendPendingSamples() {
   }
 }
 
-// === BLE ===
 // Streams a CSV batch to the browser over the TX characteristic.
-// Chunks at 180 B (safe under the negotiated MTU; the JS _lineBuffer
-// reassembles lines transparently regardless of chunk boundaries).
 void sendBleBatch(const String& batch) {
   if (!pTxChar || !bleConnected) return;
   const size_t maxChunk = 180;
@@ -259,13 +289,14 @@ void sendBleBatch(const String& batch) {
   while (off < len) {
     size_t n = (len - off < maxChunk) ? (len - off) : maxChunk;
     pTxChar->setValue((uint8_t*)(data + off), n);
-    pTxChar->notify();          // NOTE: returns void on ESP32 Arduino BLE
+    pTxChar->notify();
     off += n;
   }
 }
 
-// === BLE ===
+// ==========================================================
 // Server-side connection lifecycle.
+// ==========================================================
 class ServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer* srv, esp_ble_gatts_cb_param_t* param) override {
     if (param) bleConnId = param->connect.conn_id;
@@ -277,15 +308,19 @@ class ServerCallbacks : public BLEServerCallbacks {
     bleConnected = false;
     bleConnId    = 0xFFFF;
     bleRxBuffer  = "";
-    BLEDevice::startAdvertising();   // re-advertise so the browser can reconnect
-    DBG("BLE client disconnected");
+    // FAIL-SAFE: motor off on link loss.
+    portENTER_CRITICAL(&paramMux);
+    sharedP.on = false;
+    cmdSeq++;
+    portEXIT_CRITICAL(&paramMux);
+    BLEDevice::startAdvertising();
+    DBG("BLE disconnected - motor forced OFF");
   }
 };
 
-// === BLE ===
-// Characteristic write handler: buffer bytes, parse one command per line.
-// The JS client chunks JSON at 20 B and appends '\n', so we must reassemble
-// across multiple onWrite callbacks before calling parseCommand().
+// ==========================================================
+// Characteristic write handler.
+// ==========================================================
 class RxCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* ch) override {
     String value = ch->getValue();
@@ -306,12 +341,13 @@ class RxCallbacks : public BLECharacteristicCallbacks {
   }
 };
 
-// === BLE ===
-// Creates (once) and starts the BLE peripheral.
+// ==========================================================
+// BLE peripheral
+// ==========================================================
 void startBluetooth() {
   if (!bleInitialized) {
-    BLEDevice::init("ESP32-MotorBLE");   // name starts with "ESP32" (browser filter)
-    BLEDevice::setMTU(247);              // request a large MTU for faster streaming
+    BLEDevice::init("ESP32-MotorBLE");
+    BLEDevice::setMTU(247);
 
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new ServerCallbacks());
@@ -335,7 +371,7 @@ void startBluetooth() {
     BLEAdvertising* pAdv = BLEDevice::getAdvertising();
     pAdv->addServiceUUID(BLE_SERVICE_UUID);
     pAdv->setScanResponse(true);
-    pAdv->setMinPreferred(0x06);         // 7.5 ms
+    pAdv->setMinPreferred(0x06);
 
     bleInitialized = true;
   }
@@ -345,13 +381,81 @@ void startBluetooth() {
 }
 
 // ==========================================================
-// JSON commands (BLE only)
+// JSON commands
 // ==========================================================
 bool jsonBool(JsonVariantConst v, bool def) {
   if (v.isNull())     return def;
   if (v.is<bool>())   return v.as<bool>();
   if (v.is<float>())  return v.as<float>() != 0.0f;
   return def;
+}
+
+// Logs a rejection to Serial (if DEBUG) and queues the reason
+// for transmission over BLE (if BLE_ERROR_REPORTING).
+void rejectCommand(const char* reason) {
+#if DEBUG
+  Serial.print("REJECTED: "); Serial.println(reason);
+#endif
+#if BLE_ERROR_REPORTING
+  portENTER_CRITICAL(&errMux);
+  strncpy(pendingErr, reason, sizeof(pendingErr) - 1);
+  pendingErr[sizeof(pendingErr) - 1] = '\0';
+  portEXIT_CRITICAL(&errMux);
+#else
+  (void)reason;
+#endif
+}
+
+// ==========================================================
+// INPUT VALIDATION
+// Rejects the whole command if any field is out of its safe
+// range.  Limits chosen to allow legitimate pedagogy but
+// catch obvious abuse (e.g. des_speed=5000, VCC=0.1).
+// ==========================================================
+const char* validateParams(const Params& p, Mode m) {
+  auto inF  = [](float v,  float lo,  float hi)  {
+    return isfinite(v) && v >= lo && v <= hi;
+  };
+  auto inD  = [](double v, double lo, double hi) {
+    return isfinite((double)v) && v >= lo && v <= hi;
+  };
+
+  // Absolute field limits (generous but safe).
+  if (!inF(p.VCC,      4.0f,    30.0f))    return "VCC out of range [4,30] V";
+  if (!inF(p.A,       -30.0f,   30.0f))    return "A out of range [-30,30] V";
+  if (!inF(p.offset,  -30.0f,   30.0f))    return "offset out of range [-30,30] V";
+  if (!inF(p.omega,  -1000.0f, 1000.0f))   return "omega out of range [-1000,1000] rad/s";
+  if (!inF(p.phi,    -10000.0f,10000.0f))  return "phi out of range";
+  if (!inF(p.t0,       0.0f,  3600.0f))    return "t0 out of range [0,3600] s";
+  if (!inF(p.N,        0.0f, 10000.0f))    return "N out of range [0,10000]";
+  if (!inD(p.Kp,      -1e5,     1e5))      return "Kp out of range";
+  if (!inD(p.Ki,      -1e5,     1e5))      return "Ki out of range";
+  if (!inD(p.Kd,      -1e5,     1e5))      return "Kd out of range";
+  if (!inF(p.des_speed, -1000.0f, 1000.0f))return "des_speed out of range [-1000,1000] rad/s";
+  if (!inF(p.omega0,   0.1f,  5000.0f))    return "omega0 out of range [0.1,5000] Hz";
+  if (!inF(p.omega0c,  0.1f,  5000.0f))    return "omega0c out of range [0.1,5000] Hz";
+
+  // Discrete period (only meaningful for SINE/PID when Discrete).
+  if (p.Discrete && (m == MODE_SINE || m == MODE_PID)) {
+    if (!inF(p.T, 0.005f, 1.0f))
+      return "Discrete T out of range [0.005,1.0] s";
+  }
+
+  // Mode-specific feasibility: keep commanded voltage within bus.
+  if (m == MODE_SINE) {
+    if (fabsf(p.offset) + fabsf(p.A) > p.VCC)
+      return "|A| + |offset| exceeds VCC (would clip at 100% duty)";
+  }
+  if (m == MODE_STEP) {
+    if (fabsf(p.offset) > p.VCC || fabsf(p.A + p.offset) > p.VCC)
+      return "step target exceeds VCC (would clip at 100% duty)";
+  }
+  // PID des_speed only matters here, and the ±12V clamp handles
+  // saturation, but a sanity check catches typos (e.g. 5000).
+  if (m == MODE_PID && fabsf(p.des_speed) > 500.0f)
+    return "des_speed implausibly high (>500 rad/s)";
+
+  return nullptr;
 }
 
 void parseCommand(const char* json, size_t len) {
@@ -396,6 +500,13 @@ void parseCommand(const char* json, size_t len) {
     np.omega0c    = doc["omega0c"]    | 0.0f;
     np.filt       = jsonBool(doc["filt"],  false);
     np.filtc      = jsonBool(doc["filtc"], false);
+
+    // ---- SAFETY GATE: reject the whole command if unsafe ----
+    const char* reason = validateParams(np, np.mode);
+    if (reason != nullptr) {
+      rejectCommand(reason);
+      return;   // keep previous parameters in effect
+    }
   } else {
     return;
   }
@@ -520,9 +631,55 @@ void setMotor(int duty, int pwmValue) {
   }
 }
 
+// ----------------------------------------------------------
+// applyVoltage: layered safety
+//   1. Hard stop on V == 0 (instant stop, no ramp).
+//   2. Fail-safe (0 V) on non-finite V or VCC <= 0.
+//   3. Clamp target to +/-VCC (bus limit).
+//   4. Rate-limit ramp-UP to ~100 V/s (soft start);
+//      ramp-DOWN toward zero is unrestricted.
+//   5. Clamp duty to +/-100 % before driving the H-bridge.
+// ----------------------------------------------------------
 int applyVoltage(float V, float VCC) {
-  int duty = 0;
-  if (VCC > 0.0f) duty = (int)((V / VCC) * 100.0f);
+  static float        lastV   = 0.0f;
+  static unsigned long lastUs = 0;
+
+  // (1) Explicit zero -> instant stop.
+  if (V == 0.0f) {
+    setMotor(0, 0);
+    lastV  = 0.0f;
+    lastUs = micros();
+    return 0;
+  }
+
+  // (2) Fail-safe.
+  if (!isfinite(V) || !isfinite(VCC) || VCC <= 0.0f) {
+    setMotor(0, 0);
+    lastV = 0.0f;
+    return 0;
+  }
+
+  // (3) Clamp to bus.
+  if (V >  VCC) V =  VCC;
+  if (V < -VCC) V = -VCC;
+
+  // (4) Soft-start rate limiter.
+  unsigned long nowUs = micros();
+  float dt = (nowUs - lastUs) * 1.0e-6f;
+  lastUs = nowUs;
+  if (dt < 0.0f || dt > 0.5f) dt = 0.005f;   // sanity
+
+  const float maxRampV_per_s = 100.0f;
+  bool towardZero = (fabsf(V) < fabsf(lastV));
+  if (!towardZero) {
+    float maxDelta = maxRampV_per_s * dt;
+    if (V - lastV >  maxDelta) V = lastV + maxDelta;
+    if (V - lastV < -maxDelta) V = lastV - maxDelta;
+  }
+  lastV = V;
+
+  // (5) Duty clamp + drive.
+  int duty = (int)((V / VCC) * 100.0f);
   duty = constrain(duty, -100, 100);
   int pwmValue = abs(map(duty, -100, 100, -255, 255));
   setMotor(duty, pwmValue);
@@ -530,7 +687,7 @@ int applyVoltage(float V, float VCC) {
 }
 
 // ==========================================================
-// First-order low-pass filter (bilinear transform with prewarping)
+// First-order low-pass filter
 // ==========================================================
 float lowPass(LowPass& f, float x, float Ts, float f0_hz) {
   float w0 = f0_hz * 2.0f * pi;
@@ -545,7 +702,7 @@ float lowPass(LowPass& f, float x, float Ts, float f0_hz) {
 }
 
 // ==========================================================
-// Timer -> wakes up the control task
+// Timer -> wakes the control task
 // ==========================================================
 void onControlTimer(void* arg) {
   if (controlTaskHandle) xTaskNotifyGive(controlTaskHandle);
@@ -586,7 +743,7 @@ void controlTask(void* pv) {
       if (!P.on) {
         running = false;
         runMode = MODE_NONE;
-        applyVoltage(0.0f, 1.0f);
+        applyVoltage(0.0f, 12.0f);    // instant stop
         setControlPeriod(5000);
         continue;
       }
@@ -615,7 +772,8 @@ void controlTask(void* pv) {
     float Ts_nom = ctrlPeriod_us / 1.0e6f;
     float dt = (now - prev_us) / 1.0e6f;
     prev_us = now;
-    if (dt <= 0.0f || dt > 2.0f * Ts_nom) dt = Ts_nom;
+    // Floor: reject spurious early wakeups (would blow up Kd/Ts).
+    if (dt < 1.0e-4f || dt > 2.0f * Ts_nom) dt = Ts_nom;
     double t_rel = (now - t_start_us) / 1.0e6;
 
     float Ts = P.Discrete ? Ts_nom : dt;
@@ -669,7 +827,13 @@ void controlTask(void* pv) {
       prev_derivative = derivative;
     }
 
-    if (runMode != MODE_PID) Vreport = Vt;
+    // For non-PID modes, clamp the reported Vt to +/-VCC so the CSV
+    // column matches what the motor can actually deliver.
+    if (runMode != MODE_PID) {
+      Vt = constrain(Vt, -P.VCC, P.VCC);
+      Vreport = Vt;
+    }
+
     int duty = applyVoltage(Vt, P.VCC);
 
     Sample s;

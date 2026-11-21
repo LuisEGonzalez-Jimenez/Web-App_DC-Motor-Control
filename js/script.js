@@ -1269,10 +1269,6 @@ const num = (sel, def = 0) => {
     return Number.isFinite(v) ? v : def;
 };
 
-const bool = (sel, def = false) => {
-    const el = $(sel);
-    return el ? !!el.checked : def;
-};
 
 const log = (msg) => esp.log('[ctl] ' + msg);
 
@@ -1283,60 +1279,75 @@ const log = (msg) => esp.log('[ctl] ' + msg);
 /* ---------- command builders (one per mode) ---------- */
 
 function buildStep() {
+    console.warn("tryign to build step");
+    console.warn(num('#UI_vcc', 12));
+    console.warn(document.getElementById("UI_vcc").value);
+    
+
     return {
         interruptor: 'on',
         Type: 'Step',
-        VCC: num('#step-vcc', 12),
-        A: num('#step-a', 6),
-        t0: num('#step-t0', 1.0),
-        offset: num('#step-offset', 0)
+        VCC: num('#UI_vcc', 12),
+        A: num('#UI_amp', 6),
+        t0: num('#UI_it', 1.0),
+        offset: num('#UI_offset', 0)
     };
 }
 
 function buildSine() {
-    const discrete = bool('#sine-discrete', false);
+    console.warn("build sine");
+    const discrete = window.sb_condis;
     const cmd = {
         interruptor: 'on',
         Type: 'Sine',
-        VCC: num('#sine-vcc', 12),
-        A: num('#sine-a', 3),
-        omega: num('#sine-omega', 6.283),
-        phi: num('#sine-phi', 0),
-        offset: num('#sine-offset', 0),
+        VCC: num('#UI_vcc', 12),
+        A: num('#UI_amp', 3),
+        omega: num('#UI_freq', 6.283),
+        phi: num('#UI_phase_angle', 0),
+        offset: num('#UI_offset', 0),
         Discrete: discrete,
         Continuous: !discrete
     };
-    if (discrete) cmd.T = num('#sine-T', 0.01);
+    if (discrete) cmd.T = num('#UI_period', 0.01);
     return cmd;
 }
 
 function buildPID() {
-    const discrete = bool('#pid-discrete', false);
-    const filt = bool('#pid-filt', false);
+    const discrete = window.sb_condis;
+
     const cmd = {
         interruptor: 'on',
         Type: 'PID',
-        VCC: num('#pid-vcc', 12),
-        Kp: num('#pid-kp', 2),
-        Ki: num('#pid-ki', 5),
-        Kd: num('#pid-kd', 0.01),
-        des_speed: num('#pid-setpoint', 20),
-        filt: filt,
-        filtc: bool('#pid-filtc', false)
+        VCC: num('#UI_vcc', 12),
+        Kp: num('#UI_gainskp', 2),
+        Ki: num('#UI_gainski', 5),
+        Kd: num('#UI_gainskd', 0.01),
+        des_speed: num('#UI_ts', 20)
     };
-    if (filt) cmd.omega0 = num('#pid-omega0', 50);
-    if (cmd.filtc) cmd.omega0c = num('#pid-omega0c', 50);
+
+    // No filter UI yet — don't send filter fields at all.
+    // If the ESP32 firmware requires them, add UI controls first,
+    // then re-enable the block below.
+    // const filt = bool('#pid-filt', false);
+    // cmd.filt = filt;
+    // cmd.filtc = bool('#pid-filtc', false);
+    // if (filt) cmd.omega0 = num('#pid-omega0', 50);
+    // if (cmd.filtc) cmd.omega0c = num('#pid-omega0c', 50);
+
     if (discrete) {
         cmd.Discrete = true;
         cmd.Continuous = false;
-        cmd.T = num('#pid-T', 0.01);
+        cmd.T = num('#UI_sample_time', 0.01);
         cmd.N = num('#pid-N', 100);
     } else {
         cmd.Discrete = false;
         cmd.Continuous = true;
     }
+
     return cmd;
 }
+
+
 async function runBuilder(builder, label) {
     if (!esp.connected) {
         try { await esp.connect(); } catch (err) { log('connect failed: ' + err.message); return; }
@@ -1346,7 +1357,10 @@ async function runBuilder(builder, label) {
     log(label + ' → ' + JSON.stringify(cmd));
 
     // clear old curves before sending the new run
-    Object.values(plots).forEach(p => p.reset?.());   // reset() is optional
+    document.getElementById("plot_area_1").innerHTML = "";
+    document.getElementById("plot_area_2").innerHTML = "";
+    document.getElementById("plot_area_3").innerHTML = "";
+    document.getElementById("plot_area_4").innerHTML = "";
 
     await esp.sendCommand(cmd);
 }
@@ -1528,6 +1542,8 @@ function simulate_area(father, button_clicked = SAME_AS_LAST, state_clicked) {
     }
 
     sri_buttons.forEach(({ id, icon, iconClass, text }) => {
+        console.warn("button cycled");
+        console.warn(id);
         const button = document.createElement("button");
         button.className = "pas_buttons";
         button.id = id;
@@ -1554,8 +1570,10 @@ function simulate_area(father, button_clicked = SAME_AS_LAST, state_clicked) {
                 button.addEventListener("click", () => runBuilder(buildPID, 'PID'));
         }
 
-        if (id = "b_stop" && button_clicked == REAL_TIME_CONTROL) {
+        if (id == "b_stop" && button_clicked == REAL_TIME_CONTROL) {
+            console.warn("assigned stop");
             button.addEventListener('click', async () => {
+                console.warn("cilcked event stop, to stop the transmission");
                 if (!esp.connected) return;
                 await esp.sendCommand({ interruptor: 'off' });
                 log('STOP');
@@ -1566,19 +1584,19 @@ function simulate_area(father, button_clicked = SAME_AS_LAST, state_clicked) {
     });
 
 
-    if(button_clicked == REAL_TIME_CONTROL){
-        esp.addEventListener('connectionchange', (e) => {
-            const on = e.detail.connected;
-            document.querySelectorAll('.pas_buttons').forEach(sel => {
-                const b = $(sel); if (b) b.disabled = !on;
-            });
-        });
+    // if(button_clicked == REAL_TIME_CONTROL){
+    //     esp.addEventListener('connectionchange', (e) => {
+    //         const on = e.detail.connected;
+    //         document.querySelectorAll('.pas_buttons').forEach(sel => {
+    //             const b = $(sel); if (b) b.disabled = !on;
+    //         });
+    //     });
     
-        // Disable command buttons until first connect
-        document.querySelectorAll('.pas_buttons').forEach(b => {
-            b.disabled = true;
-        });
-    }
+    //     // Disable command buttons until first connect
+    //     document.querySelectorAll('.pas_buttons').forEach(b => {
+    //         b.disabled = true;
+    //     });
+    // }
 
 
     //create container where play and shi will go
@@ -1726,14 +1744,16 @@ function change_to_sine(condis) {
     const sbf = document.createElement('div');
     sbf.classList.add('sidebar_basic_elements');
     sbf.classList.add('formula');
-    sbf.style.fontSize = '22px';
+    
     sbg2.appendChild(sbf);
 
     if (condis == CONTINUOUS) {
         sbf.innerHTML = dictionaryFormulas["sine"];
+        sbf.style.fontSize = '22px';
     }
     else {
         sbf.innerHTML = dictionaryFormulas["sine_dis"];
+        sbf.style.fontSize = '15px';
     }
 
     //function sbf_basicform(action, for_d, label_text, Unitofmeasure, type, step) {

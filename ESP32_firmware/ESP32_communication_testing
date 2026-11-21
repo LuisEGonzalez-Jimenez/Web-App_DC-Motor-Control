@@ -1,0 +1,392 @@
+/*
+==============================================================
+ BLE Communication Test Firmware (V2.1 – with validation)
+ ESP32 – same NUS UUIDs & advertising as the motor platform
+ --------------------------------------------------------------
+ Purpose : verify the BLE link / command schema in isolation.
+           Every write to the RX characteristic is logged
+           (hex + ASCII + reassembled line + parsed JSON)
+           to Serial @ 115200.
+
+ V2.1: Added validateParams(), copied verbatim from the motor
+       firmware. Each received command is checked and a verdict
+       is printed:
+         - PASS                       (safe, would drive motor)
+         - FAIL:<reason>              (would be rejected)
+         - SKIP_NO_INTERRUPTOR        (JSON has no 'interruptor')
+         - PARSE_ERROR:<err>          (bad JSON)
+       The verdict is also echoed on TX (gated by VERDICT_ENABLED)
+       so the web client can show it. This sketch never drives
+       hardware – it only reports what the motor firmware would do.
+
+ IMPORTANT: validateParams() below MUST stay in sync with the
+            copy in the motor firmware. If you change limits in
+            one, change both.
+==============================================================
+*/
+
+#include <Arduino.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+#include <ArduinoJson.h>
+#include <math.h>
+#include <string.h>
+
+// === BLE (identical to motor firmware) ===
+#define BLE_SERVICE_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+#define BLE_RX_UUID      "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+#define BLE_TX_UUID      "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+
+// Echo every received line back over TX (useful with nRF Connect).
+// Keep 1 for raw-packet testing; set 0 when using the motor web
+// client so its CSV parser isn't disturbed.
+#define ECHO_ENABLED 1
+
+// Echo a one-line VERDICT:... for each parsed command.
+// Keep 0 to avoid polluting a CSV client; set 1 with nRF Connect
+// to see PASS/FAIL live.
+#define VERDICT_ENABLED 1
+
+BLEServer*         pServer  = nullptr;
+BLECharacteristic* pRxChar  = nullptr;
+BLECharacteristic* pTxChar  = nullptr;
+bool               bleConnected = false;
+uint16_t           bleConnId    = 0xFFFF;
+String             bleRxBuffer  = "";
+
+unsigned long totalBytes  = 0;
+unsigned long totalLines  = 0;
+unsigned long totalPass   = 0;
+unsigned long totalFail   = 0;
+unsigned long totalSkip   = 0;
+
+// ==========================================================
+// Validation: identical copy of the motor firmware's logic.
+// ==========================================================
+enum Mode { MODE_NONE = 0, MODE_STEP, MODE_SINE, MODE_PID };
+
+struct Params {
+  bool  on;
+  Mode  mode;
+  float VCC, A, t0, offset;
+  float omega, phi;
+  bool  Continuous, Discrete;
+  float T, N;
+  double Kp, Ki, Kd;
+  float des_speed;
+  float omega0, omega0c;
+  bool  filt, filtc;
+};
+
+static const char* modeName(Mode m) {
+  switch (m) {
+    case MODE_STEP: return "Step";
+    case MODE_SINE: return "Sine";
+    case MODE_PID:  return "PID";
+    default:        return "NONE";
+  }
+}
+
+bool jsonBool(JsonVariantConst v, bool def) {
+  if (v.isNull())     return def;
+  if (v.is<bool>())   return v.as<bool>();
+  if (v.is<float>())  return v.as<float>() != 0.0f;
+  return def;
+}
+
+// Returns nullptr if OK, else a human-readable rejection reason.
+// MUST match the motor firmware's validateParams() exactly.
+const char* validateParams(const Params& p, Mode m) {
+  auto inF = [](float v, float lo, float hi) {
+    return isfinite(v) && v >= lo && v <= hi;
+  };
+  auto inD = [](double v, double lo, double hi) {
+    return isfinite(v) && v >= lo && v <= hi;
+  };
+
+  if (!inF(p.VCC,      4.0f,    30.0f))    return "VCC out of range [4,30] V";
+  if (!inF(p.A,       -30.0f,   30.0f))    return "A out of range [-30,30] V";
+  if (!inF(p.offset,  -30.0f,   30.0f))    return "offset out of range [-30,30] V";
+  if (!inF(p.omega,  -1000.0f, 1000.0f))   return "omega out of range [-1000,1000] rad/s";
+  if (!inF(p.phi,    -10000.0f,10000.0f))  return "phi out of range";
+  if (!inF(p.t0,       0.0f,  3600.0f))    return "t0 out of range [0,3600] s";
+  if (!inF(p.N,        0.0f, 10000.0f))    return "N out of range [0,10000]";
+  if (!inD(p.Kp,      -1e5,     1e5))      return "Kp out of range";
+  if (!inD(p.Ki,      -1e5,     1e5))      return "Ki out of range";
+  if (!inD(p.Kd,      -1e5,     1e5))      return "Kd out of range";
+  if (!inF(p.des_speed, -1000.0f, 1000.0f))return "des_speed out of range [-1000,1000] rad/s";
+  if (!inF(p.omega0,   0.1f,  5000.0f))    return "omega0 out of range [0.1,5000] Hz";
+  if (!inF(p.omega0c,  0.1f,  5000.0f))    return "omega0c out of range [0.1,5000] Hz";
+
+  if (p.Discrete && (m == MODE_SINE || m == MODE_PID)) {
+    if (!inF(p.T, 0.005f, 1.0f))
+      return "Discrete T out of range [0.005,1.0] s";
+  }
+
+  if (m == MODE_SINE) {
+    if (fabsf(p.offset) + fabsf(p.A) > p.VCC)
+      return "|A| + |offset| exceeds VCC (would clip at 100% duty)";
+  }
+  if (m == MODE_STEP) {
+    if (fabsf(p.offset) > p.VCC || fabsf(p.A + p.offset) > p.VCC)
+      return "step target exceeds VCC (would clip at 100% duty)";
+  }
+  if (m == MODE_PID && fabsf(p.des_speed) > 500.0f)
+    return "des_speed implausibly high (>500 rad/s)";
+
+  return nullptr;
+}
+
+// ==========================================================
+// TX helper
+// ==========================================================
+void sendTx(const String& s) {
+  if (!pTxChar || !bleConnected) return;
+  const size_t maxChunk = 180;
+  size_t off = 0;
+  size_t len = s.length();
+  while (off < len) {
+    size_t n = (len - off < maxChunk) ? (len - off) : maxChunk;
+    pTxChar->setValue((uint8_t*)(s.c_str() + off), n);
+    pTxChar->notify();
+    off += n;
+  }
+}
+
+// ==========================================================
+// Server callbacks
+// ==========================================================
+class ServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer* srv, esp_ble_gatts_cb_param_t* param) override {
+    if (param) bleConnId = param->connect.conn_id;
+    bleConnected = true;
+    bleRxBuffer  = "";
+    Serial.println();
+    Serial.println("============================================");
+    Serial.println("  BLE CLIENT CONNECTED");
+    Serial.printf ("  conn_id = %u\n", (unsigned)bleConnId);
+    delay(100);
+    Serial.printf ("  MTU     = %u\n", BLEDevice::getMTU());
+    Serial.println("============================================");
+    sendTx("CONNECTED\n");
+  }
+  void onDisconnect(BLEServer* srv) override {
+    bleConnected = false;
+    bleConnId    = 0xFFFF;
+    bleRxBuffer  = "";
+    Serial.println();
+    Serial.println("=== BLE CLIENT DISCONNECTED – re-advertising ===");
+    BLEDevice::startAdvertising();
+  }
+};
+
+// ==========================================================
+// RX callbacks + per-line validation
+// ==========================================================
+class RxCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* ch) override {
+    String value = ch->getValue();
+    if (value.isEmpty()) return;
+
+    totalBytes += value.length();
+
+    // 1) Hex dump of the raw chunk
+    Serial.printf("[RX %u B] ", (unsigned)value.length());
+    for (size_t i = 0; i < value.length(); i++)
+      Serial.printf("%02X ", (uint8_t)value[i]);
+    Serial.println();
+
+    // 2) Printable preview
+    Serial.print("[ASCII] ");
+    for (size_t i = 0; i < value.length(); i++) {
+      char c = value[i];
+      if      (c == '\r') Serial.print("\\r");
+      else if (c == '\n') Serial.print("\\n");
+      else if (c >= 32 && c < 127) Serial.print(c);
+      else Serial.printf("<%02X>", (uint8_t)c);
+    }
+    Serial.println();
+
+    // 3) Reassemble lines (identical logic to motor firmware)
+    for (size_t i = 0; i < value.length(); i++) {
+      char c = value[i];
+      if (c == '\n' || c == '\r') {
+        if (bleRxBuffer.length() > 0) {
+          handleLine(bleRxBuffer);
+          bleRxBuffer = "";
+        }
+      } else {
+        bleRxBuffer += c;
+        if (bleRxBuffer.length() > 1024) {
+          Serial.println("!! RX buffer overflow – clearing");
+          bleRxBuffer = "";
+        }
+      }
+    }
+  }
+
+  // -------------------------------------------------------
+  // Runs the same extraction + validation as the motor's
+  // parseCommand(), but only reports – never acts.
+  // -------------------------------------------------------
+  String validateLine(JsonDocument& doc) {
+    const char* interruptor = doc["interruptor"];
+    if (interruptor == nullptr) {
+      totalSkip++;
+      Serial.println("  VALIDATION: SKIP (no 'interruptor' field)");
+      return "SKIP_NO_INTERRUPTOR";
+    }
+
+    // "off" is always safe
+    if (strcmp(interruptor, "off") == 0) {
+      totalPass++;
+      Serial.println("  VALIDATION: PASS (interruptor=off)");
+      return "PASS";
+    }
+    if (strcmp(interruptor, "on") != 0) {
+      totalFail++;
+      Serial.printf("  VALIDATION: FAIL (unknown interruptor '%s')\n", interruptor);
+      return String("FAIL:unknown interruptor ") + interruptor;
+    }
+
+    // Same field extraction as motor firmware parseCommand()
+    Params np = {};
+    np.on   = true;
+    np.mode = MODE_NONE;
+
+    const char* typeChar = doc["Type"];
+    if (typeChar != nullptr) {
+      if      (strcmp(typeChar, "Step") == 0) np.mode = MODE_STEP;
+      else if (strcmp(typeChar, "Sine") == 0) np.mode = MODE_SINE;
+      else if (strcmp(typeChar, "PID")  == 0) np.mode = MODE_PID;
+    }
+
+    np.VCC        = doc["VCC"]        | 0.0f;
+    np.A          = doc["A"]          | 0.0f;
+    np.t0         = doc["t0"]         | 0.0f;
+    np.offset     = doc["offset"]     | 0.0f;
+    np.omega      = doc["omega"]      | 0.0f;
+    np.phi        = doc["phi"]        | 0.0f;
+    np.Continuous = jsonBool(doc["Continuous"], true);
+    np.Discrete   = jsonBool(doc["Discrete"],   false);
+    np.T          = doc["T"]          | 0.0f;
+    np.N          = doc["N"]          | 0.0f;
+    np.Kp         = doc["Kp"]         | 0.0;
+    np.Ki         = doc["Ki"]         | 0.0;
+    np.Kd         = doc["Kd"]         | 0.0;
+    np.des_speed  = doc["des_speed"]  | 0.0f;
+    np.omega0     = doc["omega0"]     | 0.0f;
+    np.omega0c    = doc["omega0c"]    | 0.0f;
+    np.filt       = jsonBool(doc["filt"],  false);
+    np.filtc      = jsonBool(doc["filtc"], false);
+
+    Serial.printf("  Parsed: mode=%s VCC=%.2f A=%.2f offset=%.2f "
+                  "omega=%.2f des_speed=%.2f T=%.3f Discrete=%d\n",
+                  modeName(np.mode), np.VCC, np.A, np.offset,
+                  np.omega, np.des_speed, np.T, (int)np.Discrete);
+
+    const char* reason = validateParams(np, np.mode);
+    if (reason) {
+      totalFail++;
+      Serial.printf("  VALIDATION: FAIL (%s)\n", reason);
+      return String("FAIL:") + reason;
+    }
+
+    totalPass++;
+    Serial.println("  VALIDATION: PASS");
+    return "PASS";
+  }
+
+  void handleLine(const String& line) {
+    totalLines++;
+    Serial.printf("[LINE #%lu  %u chars] %s\n",
+                  totalLines, (unsigned)line.length(), line.c_str());
+
+    String verdict = "PARSE_ERROR";
+    StaticJsonDocument<1024> doc;
+    DeserializationError err = deserializeJson(doc, line);
+
+    if (err) {
+      Serial.printf("  JSON parse error: %s\n", err.c_str());
+      verdict = String("PARSE_ERROR:") + err.c_str();
+    } else {
+      Serial.println("  JSON OK – fields:");
+      for (JsonPair kv : doc.as<JsonObject>()) {
+        Serial.printf("    %-12s = %s\n",
+                      kv.key().c_str(),
+                      kv.value().as<String>().c_str());
+      }
+      verdict = validateLine(doc);
+    }
+    Serial.println();
+
+#if ECHO_ENABLED
+    sendTx("ECHO:" + line + "\n");
+#endif
+#if VERDICT_ENABLED
+    sendTx("VERDICT:" + verdict + "\n");
+#endif
+  }
+};
+
+// ==========================================================
+// Setup
+// ==========================================================
+void setup() {
+  Serial.begin(115200);
+  delay(300);
+  Serial.println();
+  Serial.println("============================================");
+  Serial.println("  BLE Comm Test V2.1 – ESP32-MotorBLE");
+  Serial.println("  Serial @ 115200, NUS UUIDs, MTU 247");
+  Serial.printf ("  Echo on TX    : %s\n", ECHO_ENABLED    ? "ON" : "OFF");
+  Serial.printf ("  Verdict on TX : %s\n", VERDICT_ENABLED ? "ON" : "OFF");
+  Serial.println("  Validation: ON (identical to motor firmware)");
+  Serial.println("============================================");
+
+  BLEDevice::init("ESP32-MotorBLE");
+  BLEDevice::setMTU(247);
+
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new ServerCallbacks());
+
+  BLEService* pService = pServer->createService(BLE_SERVICE_UUID);
+
+  pRxChar = pService->createCharacteristic(
+    BLE_RX_UUID,
+    BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
+  pRxChar->setCallbacks(new RxCallbacks());
+
+  pTxChar = pService->createCharacteristic(
+    BLE_TX_UUID,
+    BLECharacteristic::PROPERTY_NOTIFY);
+  pTxChar->addDescriptor(new BLE2902());
+
+  pService->start();
+
+  BLEAdvertising* pAdv = BLEDevice::getAdvertising();
+  pAdv->addServiceUUID(BLE_SERVICE_UUID);
+  pAdv->setScanResponse(true);
+  pAdv->setMinPreferred(0x06);
+
+  BLEDevice::startAdvertising();
+  Serial.println("Advertising as ESP32-MotorBLE – waiting for client…");
+}
+
+// ==========================================================
+// Loop
+// ==========================================================
+void loop() {
+  static unsigned long lastBeat = 0;
+  if (millis() - lastBeat > 5000) {
+    lastBeat = millis();
+    Serial.printf("[status] conn=%d bytes=%lu lines=%lu "
+                  "pass=%lu fail=%lu skip=%lu buf=%u\n",
+                  (int)bleConnected, totalBytes, totalLines,
+                  totalPass, totalFail, totalSkip,
+                  (unsigned)bleRxBuffer.length());
+  }
+  delay(50);
+}
